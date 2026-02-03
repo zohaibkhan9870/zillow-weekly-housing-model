@@ -14,10 +14,10 @@ from matplotlib.patches import Patch
 # ----------------------------
 # Streamlit Setup
 # ----------------------------
-st.set_page_config(page_title="Zillow Housing Forecast (Multi-Horizon)", layout="wide")
+st.set_page_config(page_title="US Real Estate Price Outlook Dashboard", layout="wide")
 
-st.title("🏡 Zillow Housing Forecast (Metro-Based)")
-st.write("Upload Zillow files → choose State → choose Metro → run forecast for multiple horizons.")
+st.title("🏡 US Real Estate Price Outlook Dashboard")
+st.write("Upload Zillow files → select State & Metro → get price outlook for multiple time horizons.")
 
 
 # ----------------------------
