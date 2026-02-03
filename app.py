@@ -144,9 +144,7 @@ if run_button:
         progress = st.progress(0)
         status = st.empty()
 
-        # ----------------------------
-        # Step 1: Load selected metro
-        # ----------------------------
+        # Step 1
         status.info("Step 1/5: Loading metro data...")
         progress.progress(10)
 
@@ -160,9 +158,7 @@ if run_button:
         price = pd.DataFrame(price_matches.iloc[0, 5:])
         value = pd.DataFrame(value_matches.iloc[0, 5:])
 
-        # ----------------------------
-        # Step 2: Fetch FRED macro data
-        # ----------------------------
+        # Step 2
         status.info("Step 2/5: Fetching macro data from FRED...")
         progress.progress(30)
 
@@ -189,9 +185,7 @@ if run_button:
             st.write("Error details:", str(e))
             st.stop()
 
-        # ----------------------------
-        # Step 3: Prepare Zillow price + value
-        # ----------------------------
+        # Step 3
         status.info("Step 3/5: Preparing Zillow price/value data...")
         progress.progress(50)
 
@@ -208,9 +202,7 @@ if run_button:
 
         data = fed_data.merge(price_data, left_index=True, right_index=True)
 
-        # ----------------------------
-        # Step 4: Feature engineering
-        # ----------------------------
+        # Step 4
         status.info("Step 4/5: Building features + training models...")
         progress.progress(70)
 
@@ -255,9 +247,7 @@ if run_button:
             "1 Year Ahead": 52
         }
 
-        # ----------------------------
-        # Multi-horizon forecast table
-        # ----------------------------
+        # Multi-horizon forecast
         results = []
 
         for horizon_name, weeks_ahead in horizons.items():
@@ -295,9 +285,7 @@ if run_button:
 
         out_df = pd.DataFrame(results, columns=["Time Horizon", "Prob Price Up", "Outlook", "Suggested Action"])
 
-        # ----------------------------
-        # Step 5: Build 3-month model for charts/messages
-        # ----------------------------
+        # Step 5
         status.info("Step 5/5: Creating charts + weekly summary...")
         progress.progress(90)
 
@@ -345,7 +333,7 @@ if run_button:
         progress.progress(100)
 
     # ----------------------------
-    # ✅ OUTPUT: Forecast table + CSV
+    # OUTPUT: Forecast table + CSV
     # ----------------------------
     st.subheader("✅ Forecast Results (All Time Horizons)")
     st.dataframe(out_df, use_container_width=True)
@@ -359,13 +347,12 @@ if run_button:
     )
 
     # ----------------------------
-    # ✅ Weekly + Monthly message + Charts
+    # Weekly + Monthly message + Charts
     # ----------------------------
     if prob_data is None or monthly_signal is None:
         st.warning("Not enough data to build weekly graph and monthly trend yet.")
         st.stop()
 
-    # ✅ Friendly Weekly + Monthly Message
     st.subheader("📌 Simple Weekly + Monthly Message")
 
     latest_week_prob = float(prob_data["prob_up"].tail(1).values[0])
@@ -397,7 +384,9 @@ if run_button:
     st.markdown("### 👉 Suggested Action")
     st.write(weekly_action)
 
-    # ✅ Chart 1: Price trend + risk zones
+    # ----------------------------
+    # Chart 1: Price trend + risk zones
+    # ----------------------------
     st.subheader("📈 Price Trend + Risk Background (3-Month Outlook)")
 
     fig1 = plt.figure(figsize=(14, 6))
@@ -439,12 +428,14 @@ if run_button:
     plt.tight_layout()
     st.pyplot(fig1)
 
-    # ✅ Chart 2: Weekly outlook last 12 weeks
+    # ----------------------------
+    # Chart 2: Weekly outlook last 12 weeks (WITH EXPLANATION INSIDE IMAGE)
+    # ----------------------------
     st.subheader("📊 Weekly Outlook (Last 12 Weeks)")
 
     recent = prob_data.tail(12)
 
-    fig2, ax = plt.subplots(figsize=(12, 6))
+    fig2, ax = plt.subplots(figsize=(12, 7))
 
     ax.plot(
         recent.index,
@@ -463,12 +454,23 @@ if run_button:
     ax.set_ylim(0, 1)
     ax.grid(alpha=0.3)
 
-    st.pyplot(fig2)
+    # ✅ Explanation text INSIDE the image (below the chart)
+    explanation_text = (
+        "HOW TO READ THIS CHART (Simple)\n"
+        "• Black line with dots: Weekly outlook score (higher = better).\n"
+        "• Green dotted line (0.65): Above = Good time (supportive market).\n"
+        "• Red dotted line (0.45): Below = Risky time (higher downside risk).\n"
+        "• X-axis = Weeks (time) | Y-axis = Score from 0 to 1."
+    )
 
-    # ✅ Simple explanation under the weekly chart
-    st.markdown("### ✅ How to read this weekly chart (Simple)")
-    st.write("• **Black line with dots:** The model’s weekly outlook score (higher = better market outlook).")
-    st.write("• **Green dotted line (0.65):** Above this line = **Good time** (supportive market).")
-    st.write("• **Red dotted line (0.45):** Below this line = **Risky time** (higher downside risk).")
-    st.write("• **X-axis (Week):** The recent weeks (time).")
-    st.write("• **Y-axis (Outlook Score 0–1):** The model’s confidence level.")
+    fig2.text(
+        0.5,
+        0.01,
+        explanation_text,
+        ha="center",
+        va="bottom",
+        fontsize=10
+    )
+
+    plt.tight_layout(rect=[0, 0.12, 1, 1])
+    st.pyplot(fig2)
