@@ -132,7 +132,6 @@ def validate_zillow_csv(uploaded_file, expected_type):
         return False, "❌ Wrong file content: could not detect enough valid date columns.", None
 
     median_days = safe_median_date_diff_days(parsed_dates)
-
     if median_days is None:
         return False, "❌ Wrong file content: could not detect weekly/monthly frequency.", None
 
@@ -148,43 +147,46 @@ def validate_zillow_csv(uploaded_file, expected_type):
 
 
 # ----------------------------
-# ✅ Upload Section
+# ✅ Upload Section (CLEAN UI)
 # ----------------------------
 st.subheader("📤 Upload Zillow Files")
 
-price_file = st.file_uploader("Upload Weekly Median Sale Price CSV", type=["csv"])
 price_ok = False
-zillow_price = None
-
-if price_file is not None:
-    if price_file.name != EXPECTED_PRICE_FILENAME:
-        st.warning(f"⚠️ File name is different than expected.\nExpected: {EXPECTED_PRICE_FILENAME}")
-
-    ok, msg, df_temp = validate_zillow_csv(price_file, "weekly_price")
-    if ok:
-        st.success(msg)
-        price_ok = True
-        zillow_price = df_temp
-    else:
-        st.error(msg)
-
-value_file = st.file_uploader("Upload ZHVI Home Value Index CSV", type=["csv"])
 value_ok = False
+zillow_price = None
 zillow_value = None
 
-if value_file is not None:
-    if value_file.name != EXPECTED_VALUE_FILENAME:
-        st.warning(f"⚠️ File name is different than expected.\nExpected: {EXPECTED_VALUE_FILENAME}")
+with st.expander("📤 Upload Files (Click to expand)", expanded=True):
+    price_file = st.file_uploader("Upload Weekly Median Sale Price CSV", type=["csv"])
 
-    ok, msg, df_temp = validate_zillow_csv(value_file, "monthly_value")
-    if ok:
-        st.success(msg)
-        value_ok = True
-        zillow_value = df_temp
-    else:
-        st.error(msg)
+    if price_file is not None:
+        if price_file.name != EXPECTED_PRICE_FILENAME:
+            st.warning(f"⚠️ File name is different than expected.\nExpected: {EXPECTED_PRICE_FILENAME}")
 
-if not (price_ok and value_ok):
+        ok, msg, df_temp = validate_zillow_csv(price_file, "weekly_price")
+        if ok:
+            price_ok = True
+            zillow_price = df_temp
+        else:
+            st.error(msg)
+
+    value_file = st.file_uploader("Upload ZHVI Home Value Index CSV", type=["csv"])
+
+    if value_file is not None:
+        if value_file.name != EXPECTED_VALUE_FILENAME:
+            st.warning(f"⚠️ File name is different than expected.\nExpected: {EXPECTED_VALUE_FILENAME}")
+
+        ok, msg, df_temp = validate_zillow_csv(value_file, "monthly_value")
+        if ok:
+            value_ok = True
+            zillow_value = df_temp
+        else:
+            st.error(msg)
+
+# ✅ After upload: show ONE CLEAN status message
+if price_ok and value_ok:
+    st.success("✅ Files Verified! You can now select location and run forecast.")
+else:
     st.info("✅ Upload both correct files to continue.")
     st.stop()
 
@@ -196,14 +198,9 @@ def load_fred_series(series_id):
     api_key = st.secrets["FRED_API_KEY"]
 
     url = "https://api.stlouisfed.org/fred/series/observations"
-    params = {
-        "series_id": series_id,
-        "api_key": api_key,
-        "file_type": "json"
-    }
+    params = {"series_id": series_id, "api_key": api_key, "file_type": "json"}
 
     r = requests.get(url, params=params, timeout=30)
-
     if r.status_code != 200:
         raise Exception(f"FRED API request failed for {series_id}. Status: {r.status_code}")
 
@@ -272,11 +269,7 @@ if metro_search:
         auto_metro = matches[0]
         auto_state = auto_metro.split(",")[-1].strip()
 
-if auto_state in states:
-    default_state_index = states.index(auto_state)
-else:
-    default_state_index = 0
-
+default_state_index = states.index(auto_state) if auto_state in states else 0
 selected_state = st.selectbox("Choose State", states, index=default_state_index)
 
 filtered_metros = [m for m in metro_list if m.endswith(f", {selected_state}")]
@@ -287,18 +280,14 @@ if len(filtered_metros) == 0:
     st.warning("⚠️ No metros found. Try another search or change state.")
     st.stop()
 
-if auto_metro in filtered_metros:
-    default_metro_index = filtered_metros.index(auto_metro)
-else:
-    default_metro_index = 0
-
+default_metro_index = filtered_metros.index(auto_metro) if auto_metro in filtered_metros else 0
 selected_metro = st.selectbox("Choose Metro", filtered_metros, index=default_metro_index)
 
 run_button = st.button("✅ Run Forecast")
 
 
 # ----------------------------
-# ✅ Run Model + Show Results (FULL VERSION)
+# ✅ Run Model + Results + Charts
 # ----------------------------
 if run_button:
     with st.spinner(f"⏳ Processing... Running forecast for {selected_metro}"):
