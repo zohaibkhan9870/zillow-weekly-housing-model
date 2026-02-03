@@ -21,6 +21,15 @@ st.write("Upload Zillow files → select State & Metro → get price outlook for
 
 
 # ----------------------------
+# ✅ Reset Button (NEW)
+# ----------------------------
+st.sidebar.markdown("---")
+if st.sidebar.button("🔄 Reset / Clear All"):
+    st.session_state.clear()
+    st.rerun()
+
+
+# ----------------------------
 # Sidebar: Zillow Download Help + Uploads
 # ----------------------------
 st.sidebar.header("📂 Zillow CSV Setup")
@@ -33,14 +42,11 @@ file_status = st.sidebar.radio(
 # If user needs help downloading
 if file_status == "⬇️ No, I need to download them":
     st.sidebar.markdown("### ✅ Step 1: Open Zillow Research Page")
-
-    # ✅ only button (no raw link, no extra text)
     st.sidebar.link_button("🌐 Open Zillow Data Page", "https://www.zillow.com/research/data/")
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("### ✅ Step 2: Download these 2 CSV files")
 
-    # ✅ Visible file name style (no scroll)
     st.sidebar.markdown("#### 🏠 Home Values Section")
     st.sidebar.markdown("Download **ZHVI (Home Value Index)** CSV:")
     st.sidebar.markdown(
@@ -64,24 +70,50 @@ if file_status == "⬇️ No, I need to download them":
     )
 
     st.sidebar.markdown("---")
-    st.sidebar.info("✅ After downloading both files, come back and select 'Yes' above to upload them.")
+    st.sidebar.info("✅ After downloading both files, come back and select 'Yes' above.")
     st.stop()
 
 
 # ----------------------------
-# Sidebar Uploads (only if YES)
+# ✅ Checkbox confirmation before upload (NEW)
 # ----------------------------
-st.sidebar.header("📤 Upload Zillow Files")
+st.sidebar.markdown("---")
+confirm_download = st.sidebar.checkbox("✅ I downloaded both Zillow CSV files")
 
-price_file = st.sidebar.file_uploader(
-    "Upload Weekly Median Sale Price CSV",
-    type=["csv"]
-)
 
-value_file = st.sidebar.file_uploader(
-    "Upload ZHVI Home Value Index CSV",
-    type=["csv"]
-)
+# ----------------------------
+# Uploads (only after confirmation)
+# ----------------------------
+if confirm_download:
+    st.sidebar.header("📤 Upload Zillow Files")
+
+    price_file = st.sidebar.file_uploader(
+        "Upload Weekly Median Sale Price CSV",
+        type=["csv"]
+    )
+
+    value_file = st.sidebar.file_uploader(
+        "Upload ZHVI Home Value Index CSV",
+        type=["csv"]
+    )
+
+    # ✅ Upload Status (NEW)
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("✅ Upload Status")
+
+    if price_file is not None:
+        st.sidebar.success("✅ Median Sale Price file uploaded")
+    else:
+        st.sidebar.error("❌ Median Sale Price file missing")
+
+    if value_file is not None:
+        st.sidebar.success("✅ ZHVI file uploaded")
+    else:
+        st.sidebar.error("❌ ZHVI file missing")
+
+else:
+    st.info("✅ Please confirm you downloaded both Zillow CSV files to unlock uploads.")
+    st.stop()
 
 
 # ----------------------------
@@ -145,6 +177,19 @@ def regime_from_prob(p):
 
 
 # ----------------------------
+# ✅ What does this forecast mean? (NEW)
+# ----------------------------
+st.markdown("---")
+with st.expander("ℹ️ What does this forecast mean? (Simple explanation)"):
+    st.write("✅ **Price Up Chance (%)** = chance home prices may rise.")
+    st.write("✅ **Price Down Chance (%)** = chance home prices may fall.")
+    st.write("✅ **Outlook** shows the simple signal:")
+    st.write("• 🟢 Good time = more chance of prices going up")
+    st.write("• 🟡 Unclear = mixed signals (could go up or down)")
+    st.write("• 🔴 Risky = higher downside risk")
+
+
+# ----------------------------
 # ✅ STEP 1: If files uploaded → show dropdowns FIRST
 # ----------------------------
 selected_metro = None
@@ -170,10 +215,27 @@ if price_file and value_file:
 
     st.sidebar.header("🌎 Select Location")
 
+    # ✅ Metro Search filter (NEW)
+    metro_search = st.sidebar.text_input("🔍 Search metro (optional)", "")
+
+    # States dropdown
     states = sorted(list(set([m.split(",")[-1].strip() for m in metro_list if "," in m])))
     selected_state = st.sidebar.selectbox("Choose State", states)
 
+    # Filter metros by selected state
     filtered_metros = [m for m in metro_list if m.endswith(f", {selected_state}")]
+
+    # Apply search filter
+    if metro_search.strip():
+        filtered_metros = [
+            m for m in filtered_metros
+            if metro_search.lower() in m.lower()
+        ]
+
+    if len(filtered_metros) == 0:
+        st.sidebar.warning("⚠️ No metros found. Try another search.")
+        st.stop()
+
     selected_metro = st.sidebar.selectbox("Choose Metro", filtered_metros)
 
     st.sidebar.markdown("---")
