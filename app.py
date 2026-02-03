@@ -457,10 +457,18 @@ if run_button:
     ax.axhline(0.65, color="green", linestyle="--", alpha=0.6)
     ax.axhline(0.45, color="red", linestyle="--", alpha=0.6)
 
-    ax.set_title("Weekly Housing Outlook (Last 12 Weeks)", fontsize=14, weight="bold")
+    ax.set_title("Weekly Outlook Score (Last 12 Weeks)", fontsize=14, weight="bold")
     ax.set_ylabel("Outlook Score (0 to 1)")
     ax.set_xlabel("Week")
     ax.set_ylim(0, 1)
     ax.grid(alpha=0.3)
 
     st.pyplot(fig2)
+
+    # ✅ Simple explanation under the weekly chart
+    st.markdown("### ✅ How to read this weekly chart (Simple)")
+    st.write("• **Black line with dots:** The model’s weekly outlook score (higher = better market outlook).")
+    st.write("• **Green dotted line (0.65):** Above this line = **Good time** (supportive market).")
+    st.write("• **Red dotted line (0.45):** Below this line = **Risky time** (higher downside risk).")
+    st.write("• **X-axis (Week):** The recent weeks (time).")
+    st.write("• **Y-axis (Outlook Score 0–1):** The model’s confidence level.")
