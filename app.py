@@ -4,6 +4,7 @@ import numpy as np
 import requests
 from datetime import timedelta
 from sklearn.ensemble import RandomForestClassifier
+from io import BytesIO
 
 import matplotlib
 matplotlib.use("Agg")
@@ -17,7 +18,7 @@ from matplotlib.patches import Patch
 st.set_page_config(page_title="Zillow Housing Forecast (Multi-Horizon)", layout="wide")
 
 st.title("🏡 Zillow Housing Forecast (Metro-Based)")
-st.write("Upload Zillow files → choose a metro → get predictions for multiple time horizons.")
+st.write("Upload Zillow files → select metro from dropdown → get predictions for multiple time horizons.")
 
 
 # ----------------------------
@@ -35,7 +36,6 @@ value_file = st.sidebar.file_uploader(
     type=["csv"]
 )
 
-TARGET_METRO = st.sidebar.text_input("Enter Target Metro (example: Tampa)", "Tampa")
 run_button = st.sidebar.button("✅ Run Forecast")
 
 
@@ -99,6 +99,10 @@ def regime_from_prob(p):
         return "Neutral"
 
 
+def dataframe_to_csv_bytes(df):
+    return df.to_csv(index=False).encode("utf-8")
+
+
 # ----------------------------
 # MAIN RUN
 # ----------------------------
@@ -115,28 +119,35 @@ if run_button:
     zillow_price = pd.read_csv(price_file)
     zillow_value = pd.read_csv(value_file)
 
-    # ----------------------------
-    # Auto detect metro
-    # ----------------------------
-    price_matches = zillow_price[
-        zillow_price["RegionName"].str.contains(TARGET_METRO, case=False, na=False)
-    ]
+    # ✅ Build Metro Dropdown List
+    if "RegionName" not in zillow_price.columns or "RegionName" not in zillow_value.columns:
+        st.error("❌ Your Zillow file is missing the 'RegionName' column.")
+        st.stop()
 
-    value_matches = zillow_value[
-        zillow_value["RegionName"].str.contains(TARGET_METRO, case=False, na=False)
-    ]
+    metro_list = sorted(
+        set(zillow_price["RegionName"].dropna().unique()).intersection(
+            set(zillow_value["RegionName"].dropna().unique())
+        )
+    )
+
+    if len(metro_list) == 0:
+        st.error("❌ Could not find matching metros between both files.")
+        st.stop()
+
+    st.sidebar.header("🏙️ Select Metro")
+    selected_metro = st.sidebar.selectbox("Choose Metro", metro_list, index=0)
+
+    st.info(f"✅ Selected Metro: {selected_metro}")
+
+    # ----------------------------
+    # Extract Selected Metro Row
+    # ----------------------------
+    price_matches = zillow_price[zillow_price["RegionName"] == selected_metro]
+    value_matches = zillow_value[zillow_value["RegionName"] == selected_metro]
 
     if price_matches.empty or value_matches.empty:
-        st.error(f"❌ Metro '{TARGET_METRO}' not found in Zillow files.")
+        st.error("❌ Selected metro not found in both files.")
         st.stop()
-
-    if len(price_matches) > 1:
-        st.warning("⚠️ Multiple matches found. Please refine TARGET_METRO.")
-        st.write(price_matches["RegionName"].values)
-        st.stop()
-
-    metro_name = price_matches["RegionName"].values[0]
-    st.info(f"✅ Using Zillow metro: {metro_name}")
 
     # Zillow data starts from column 5 onward
     price = pd.DataFrame(price_matches.iloc[0, 5:])
@@ -277,6 +288,15 @@ if run_button:
     st.subheader("✅ Forecast Results (All Time Horizons)")
     st.dataframe(out_df, use_container_width=True)
 
+    # ✅ Download button
+    csv_bytes = dataframe_to_csv_bytes(out_df)
+    st.download_button(
+        label="⬇️ Download Results CSV",
+        data=csv_bytes,
+        file_name=f"{selected_metro.replace(',', '').replace(' ', '_')}_forecast_results.csv",
+        mime="text/csv"
+    )
+
     # ----------------------------
     # Build 3-month model outputs (for weekly graph + monthly trend)
     # ----------------------------
@@ -322,19 +342,16 @@ if run_button:
     )
 
     # ----------------------------
-    # ✅ Friendly Weekly + Monthly Message (Option A)
+    # ✅ Friendly Weekly + Monthly Message
     # ----------------------------
     st.subheader("📌 Simple Weekly + Monthly Message")
 
     latest_week_prob = float(prob_data["prob_up"].tail(1).values[0])
-    latest_week_regime = regime_from_prob(latest_week_prob)
-
-    latest_month_regime = monthly_signal["regime"].tail(1).values[0]
-
     weekly_outlook_label = friendly_label(latest_week_prob)
     weekly_action = simple_action(weekly_outlook_label)
 
-    # Weekly box
+    latest_month_regime = monthly_signal["regime"].tail(1).values[0]
+
     if "🟢" in weekly_outlook_label:
         st.success(f"✅ This Week’s Outlook: {weekly_outlook_label}")
         st.write("The market looks supportive. Prices are more likely to move up.")
@@ -345,7 +362,6 @@ if run_button:
         st.warning(f"✅ This Week’s Outlook: {weekly_outlook_label}")
         st.write("Mixed signs. Prices could go up or down.")
 
-    # Monthly trend box
     if latest_month_regime == "Bull":
         st.info("ℹ️ Bigger Trend (Monthly): 🟢 Growing trend")
         st.write("The longer trend looks positive.")
@@ -360,7 +376,7 @@ if run_button:
     st.write(weekly_action)
 
     # ----------------------------
-    # CHART 1: Price Trend + Risk Background (3-month model)
+    # CHART 1: Price Trend + Risk Background
     # ----------------------------
     st.subheader("📈 Price Trend + Risk Background (3-Month Outlook)")
 
@@ -385,7 +401,7 @@ if run_button:
 
         plt.axvspan(prob_data.index[i], prob_data.index[i + 1], color=color, alpha=0.12)
 
-    plt.title(f"{metro_name} Housing Price Trend (With Risk Zones)", fontsize=14, weight="bold")
+    plt.title(f"{selected_metro} Housing Price Trend (With Risk Zones)", fontsize=14, weight="bold")
     plt.ylabel("Inflation-Adjusted Price")
     plt.xlabel("Date")
 
@@ -404,7 +420,7 @@ if run_button:
     st.pyplot(fig1)
 
     # ----------------------------
-    # ✅ CHART 2: Weekly Graph (Last 12 Weeks)
+    # CHART 2: Weekly Outlook Graph (Last 12 Weeks)
     # ----------------------------
     st.subheader("📊 Weekly Outlook (Last 12 Weeks)")
 
