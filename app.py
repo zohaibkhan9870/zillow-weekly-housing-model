@@ -147,7 +147,7 @@ def validate_zillow_csv(uploaded_file, expected_type):
 
 
 # ----------------------------
-# ✅ Upload Section (CLEAN UI)
+# ✅ Upload Section (AUTO-CLOSE AFTER VERIFIED)
 # ----------------------------
 st.subheader("📤 Upload Zillow Files")
 
@@ -156,7 +156,12 @@ value_ok = False
 zillow_price = None
 zillow_value = None
 
-with st.expander("📤 Upload Files (Click to expand)", expanded=True):
+if "files_verified" not in st.session_state:
+    st.session_state.files_verified = False
+
+expander_open = not st.session_state.files_verified
+
+with st.expander("📤 Upload Files (Click to expand)", expanded=expander_open):
     price_file = st.file_uploader("Upload Weekly Median Sale Price CSV", type=["csv"])
 
     if price_file is not None:
@@ -183,8 +188,9 @@ with st.expander("📤 Upload Files (Click to expand)", expanded=True):
         else:
             st.error(msg)
 
-# ✅ After upload: show ONE CLEAN status message
+# ✅ Once verified -> Save in session state + auto-collapse
 if price_ok and value_ok:
+    st.session_state.files_verified = True
     st.success("✅ Files Verified! You can now select location and run forecast.")
 else:
     st.info("✅ Upload both correct files to continue.")
@@ -469,7 +475,6 @@ if run_button:
         mime="text/csv"
     )
 
-    # Weekly message
     st.subheader("📌 Weekly Prediction")
     latest_week_prob = float(prob_data["prob_up"].tail(1).values[0])
     weekly_label = friendly_label(latest_week_prob)
@@ -485,7 +490,6 @@ if run_button:
         st.warning(f"✅ Weekly Outlook: {weekly_label}")
         st.write("This week is unclear. Prices could move up or down.")
 
-    # Monthly message
     st.subheader("📌 Monthly Prediction")
     latest_month_regime = monthly_signal["regime"].tail(1).values[0]
 
@@ -499,14 +503,11 @@ if run_button:
         st.info("ℹ️ Monthly Trend: 🟡 Still unclear")
         st.write("The bigger monthly trend is still unclear.")
 
-    # Suggested Action
     st.subheader("👉 Suggested Action")
     st.write(weekly_action)
 
-    # Chart 1
     st.subheader("📈 Price Trend + Risk Background (3-Month Outlook)")
     fig1 = plt.figure(figsize=(14, 6))
-
     plt.plot(prob_data.index, prob_data["adj_price"], color="black", linewidth=2)
 
     for i in range(len(prob_data) - 1):
@@ -533,7 +534,6 @@ if run_button:
     plt.tight_layout()
     st.pyplot(fig1)
 
-    # Chart 2
     st.subheader("📊 Weekly Outlook (Last 12 Weeks)")
     recent = prob_data.tail(12)
 
