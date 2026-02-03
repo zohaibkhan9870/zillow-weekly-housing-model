@@ -17,7 +17,7 @@ from matplotlib.patches import Patch
 st.set_page_config(page_title="Zillow Housing Forecast (Multi-Horizon)", layout="wide")
 
 st.title("🏡 Zillow Housing Forecast (Metro-Based)")
-st.write("Upload Zillow files → select metro → run forecast for multiple horizons.")
+st.write("Upload Zillow files → select metro from dropdown → run forecast for multiple time horizons.")
 
 
 # ----------------------------
@@ -225,8 +225,8 @@ if run_button:
         "stress_13w_change"
     ]
 
-    # ✅ smaller start so more metros work
-    START = 104  # ~2 years
+    # ✅ Smaller START so more metros work
+    START = 104  # ~2 years weekly
     STEP = 26    # ~6 months
 
     horizons = {
@@ -237,6 +237,9 @@ if run_button:
         "1 Year Ahead": 52
     }
 
+    # ----------------------------
+    # Multi-Horizon Forecast Table
+    # ----------------------------
     results = []
 
     for horizon_name, weeks_ahead in horizons.items():
@@ -276,3 +279,162 @@ if run_button:
 
     st.subheader("✅ Forecast Results (All Time Horizons)")
     st.dataframe(out_df, use_container_width=True)
+
+    # ✅ Download Forecast CSV
+    csv_bytes = out_df.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        label="⬇️ Download Results CSV",
+        data=csv_bytes,
+        file_name=f"{selected_metro.replace(',', '').replace(' ', '_')}_forecast_results.csv",
+        mime="text/csv"
+    )
+
+    # ----------------------------
+    # Build 3-Month Model Data (Weekly Graph + Monthly Trend)
+    # ----------------------------
+    horizon_weeks = 13
+    temp3 = data.copy()
+    temp3["future_price"] = temp3["adj_price"].shift(-horizon_weeks)
+    temp3["target"] = (temp3["future_price"] > temp3["adj_price"]).astype(int)
+    temp3.dropna(inplace=True)
+
+    if temp3.shape[0] <= START:
+        st.warning("Not enough data to build weekly graph and monthly trend yet.")
+        st.stop()
+
+    def predict_proba_3(train, test):
+        rf = RandomForestClassifier(min_samples_split=10, random_state=1)
+        rf.fit(train[predictors], train["target"])
+        return rf.predict_proba(test[predictors])[:, 1]
+
+    all_probs_3 = []
+    for i in range(START, temp3.shape[0], STEP):
+        train = temp3.iloc[:i]
+        test = temp3.iloc[i:i + STEP]
+        if len(test) == 0:
+            continue
+        all_probs_3.append(predict_proba_3(train, test))
+
+    probs3 = np.concatenate(all_probs_3)
+
+    prob_data = temp3.iloc[START:].copy()
+    prob_data["prob_up"] = probs3
+    prob_data["regime"] = prob_data["prob_up"].apply(regime_from_prob)
+
+    # Monthly trend
+    monthly = prob_data.copy()
+    monthly["month"] = monthly.index.to_period("M")
+
+    monthly_signal = (
+        monthly.groupby("month")
+        .agg({
+            "prob_up": "mean",
+            "regime": lambda x: x.value_counts().index[0]
+        })
+    )
+
+    # ----------------------------
+    # ✅ Friendly Weekly + Monthly Message
+    # ----------------------------
+    st.subheader("📌 Simple Weekly + Monthly Message")
+
+    latest_week_prob = float(prob_data["prob_up"].tail(1).values[0])
+    weekly_label = friendly_label(latest_week_prob)
+    weekly_action = simple_action(weekly_label)
+
+    latest_month_regime = monthly_signal["regime"].tail(1).values[0]
+
+    if "🟢" in weekly_label:
+        st.success(f"✅ This Week’s Outlook: {weekly_label}")
+        st.write("The market looks supportive. Prices are more likely to move up.")
+    elif "🔴" in weekly_label:
+        st.error(f"✅ This Week’s Outlook: {weekly_label}")
+        st.write("The market looks risky. Prices may face downward pressure.")
+    else:
+        st.warning(f"✅ This Week’s Outlook: {weekly_label}")
+        st.write("Mixed signs. Prices could go up or down.")
+
+    if latest_month_regime == "Bull":
+        st.info("ℹ️ Bigger Trend (Monthly): 🟢 Growing trend")
+        st.write("The longer trend looks positive.")
+    elif latest_month_regime == "Risk":
+        st.info("ℹ️ Bigger Trend (Monthly): 🔴 Weak trend")
+        st.write("The longer trend looks weak or risky.")
+    else:
+        st.info("ℹ️ Bigger Trend (Monthly): 🟡 Still unclear")
+        st.write("The longer trend is also not strong.")
+
+    st.markdown("### 👉 Suggested Action")
+    st.write(weekly_action)
+
+    # ----------------------------
+    # ✅ Chart 1: Price Trend + Risk Zones
+    # ----------------------------
+    st.subheader("📈 Price Trend + Risk Background (3-Month Outlook)")
+
+    fig1 = plt.figure(figsize=(14, 6))
+
+    plt.plot(
+        prob_data.index,
+        prob_data["adj_price"],
+        color="black",
+        linewidth=2,
+        label="Real Home Price (Inflation-Adjusted)"
+    )
+
+    for i in range(len(prob_data) - 1):
+        regime = prob_data["regime"].iloc[i]
+        if regime == "Bull":
+            color = "green"
+        elif regime == "Neutral":
+            color = "gold"
+        else:
+            color = "red"
+
+        plt.axvspan(prob_data.index[i], prob_data.index[i + 1], color=color, alpha=0.12)
+
+    plt.title(f"{selected_metro} Housing Price Trend (With Risk Zones)", fontsize=14, weight="bold")
+    plt.ylabel("Inflation-Adjusted Price")
+    plt.xlabel("Date")
+
+    legend_elements = [
+        Patch(facecolor="green", alpha=0.25, label="Supportive"),
+        Patch(facecolor="gold", alpha=0.25, label="Unclear"),
+        Patch(facecolor="red", alpha=0.25, label="Risky"),
+    ]
+
+    plt.legend(
+        handles=[plt.Line2D([0], [0], color="black", lw=2, label="Real Price")] + legend_elements,
+        loc="upper left"
+    )
+
+    plt.tight_layout()
+    st.pyplot(fig1)
+
+    # ----------------------------
+    # ✅ Chart 2: Weekly Outlook (Last 12 Weeks)
+    # ----------------------------
+    st.subheader("📊 Weekly Outlook (Last 12 Weeks)")
+
+    recent = prob_data.tail(12)
+
+    fig2, ax = plt.subplots(figsize=(12, 6))
+
+    ax.plot(
+        recent.index,
+        recent["prob_up"],
+        marker="o",
+        linewidth=2.5,
+        color="black"
+    )
+
+    ax.axhline(0.65, color="green", linestyle="--", alpha=0.6)
+    ax.axhline(0.45, color="red", linestyle="--", alpha=0.6)
+
+    ax.set_title("Weekly Housing Outlook (Last 12 Weeks)", fontsize=14, weight="bold")
+    ax.set_ylabel("Outlook Score (0 to 1)")
+    ax.set_xlabel("Week")
+    ax.set_ylim(0, 1)
+    ax.grid(alpha=0.3)
+
+    st.pyplot(fig2)
