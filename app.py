@@ -21,35 +21,33 @@ st.write("Upload Zillow files → select State & Metro → get price outlook for
 
 
 # ----------------------------
-# ✅ Reset Button
+# ✅ Reset Button (MAIN SCREEN NOW)
 # ----------------------------
-st.sidebar.markdown("---")
-if st.sidebar.button("🔄 Reset / Clear All"):
+st.markdown("---")
+if st.button("🔄 Reset / Clear All"):
     st.session_state.clear()
     st.rerun()
 
 
 # ----------------------------
-# Sidebar: Zillow Download Help + Uploads
+# ✅ Step 0: Zillow CSV Setup (MAIN SCREEN)
 # ----------------------------
-st.sidebar.header("📂 Zillow CSV Setup")
+st.subheader("📂 Zillow CSV Setup")
 
-file_status = st.sidebar.radio(
+file_status = st.radio(
     "Do you already have the Zillow CSV files downloaded?",
     ["✅ Yes, I already have them", "⬇️ No, I need to download them"]
 )
 
-# If user needs help downloading
 if file_status == "⬇️ No, I need to download them":
-    st.sidebar.markdown("### ✅ Step 1: Open Zillow Research Page")
-    st.sidebar.link_button("🌐 Open Zillow Data Page", "https://www.zillow.com/research/data/")
+    st.markdown("### ✅ Step 1: Open Zillow Research Page")
+    st.link_button("🌐 Open Zillow Data Page", "https://www.zillow.com/research/data/")
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### ✅ Step 2: Download these 2 CSV files")
+    st.markdown("### ✅ Step 2: Download these 2 CSV files")
 
-    st.sidebar.markdown("#### 🏠 Home Values Section")
-    st.sidebar.markdown("Download **ZHVI (Home Value Index)** CSV:")
-    st.sidebar.markdown(
+    st.markdown("#### 🏠 Home Values Section")
+    st.markdown("Download **ZHVI (Home Value Index)** CSV:")
+    st.markdown(
         """
         <div style="background-color:#111827; padding:12px; border-radius:10px; font-size:14px;">
             <b>Metro_zhvi_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv</b>
@@ -58,9 +56,9 @@ if file_status == "⬇️ No, I need to download them":
         unsafe_allow_html=True
     )
 
-    st.sidebar.markdown("#### 💰 Sales Section")
-    st.sidebar.markdown("Download **Median Sale Price (Weekly)** CSV:")
-    st.sidebar.markdown(
+    st.markdown("#### 💰 Sales Section")
+    st.markdown("Download **Median Sale Price (Weekly)** CSV:")
+    st.markdown(
         """
         <div style="background-color:#111827; padding:12px; border-radius:10px; font-size:14px;">
             <b>Metro_median_sale_price_uc_sfrcondo_sm_week.csv</b>
@@ -69,34 +67,28 @@ if file_status == "⬇️ No, I need to download them":
         unsafe_allow_html=True
     )
 
-    st.sidebar.markdown("---")
-    st.sidebar.info("✅ After downloading both files, come back and select 'Yes' above.")
+    st.info("✅ After downloading both files, select 'Yes' above and upload them below.")
     st.stop()
 
 
 # ----------------------------
-# ✅ Checkbox confirmation before upload
+# ✅ Confirmation checkbox
 # ----------------------------
-st.sidebar.markdown("---")
-confirm_download = st.sidebar.checkbox("✅ I downloaded both Zillow CSV files")
+confirm_download = st.checkbox("✅ I downloaded both Zillow CSV files")
 
 if not confirm_download:
-    st.info("✅ Please confirm you downloaded both Zillow CSV files to unlock uploads.")
+    st.warning("✅ Please confirm you downloaded both Zillow CSV files to unlock uploads.")
     st.stop()
 
 
 # ----------------------------
-# ✅ File Validation (Name + Content)  ✅ FIXED
+# ✅ File Validation (Name + Content)
 # ----------------------------
 EXPECTED_PRICE_FILENAME = "Metro_median_sale_price_uc_sfrcondo_sm_week.csv"
 EXPECTED_VALUE_FILENAME = "Metro_zhvi_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv"
 
 
 def safe_median_date_diff_days(parsed_dates: pd.DatetimeIndex):
-    """
-    Returns median difference in days between sorted dates.
-    If can't compute safely, returns None.
-    """
     if parsed_dates is None or len(parsed_dates) < 2:
         return None
 
@@ -106,35 +98,26 @@ def safe_median_date_diff_days(parsed_dates: pd.DatetimeIndex):
     if diffs.empty:
         return None
 
-    # diffs is Timedelta series now
     median_days = diffs.dt.total_seconds().median() / (60 * 60 * 24)
     return median_days
 
 
 def validate_zillow_csv(uploaded_file, expected_type):
-    """
-    expected_type: "weekly_price" or "monthly_value"
-    Returns: (is_valid: bool, message: str, df: DataFrame|None)
-    """
     try:
         df = pd.read_csv(uploaded_file)
     except Exception:
         return False, "❌ Could not read this CSV file.", None
 
-    # Must contain RegionName
     if "RegionName" not in df.columns:
         return False, "❌ Wrong file content: missing required column 'RegionName'.", None
 
-    # Must have enough columns (time series should exist)
     if df.shape[1] < 10:
         return False, "❌ Wrong file content: not enough columns (missing time series).", None
 
-    # Metro format check
     sample_regions = df["RegionName"].dropna().astype(str).head(30).tolist()
     if not any("," in x for x in sample_regions):
         return False, "❌ Wrong file content: RegionName does not look like metro format (City, ST).", None
 
-    # Detect date columns
     date_cols = list(df.columns[5:])
     parsed_dates = pd.to_datetime(date_cols, errors="coerce").dropna()
 
@@ -146,8 +129,6 @@ def validate_zillow_csv(uploaded_file, expected_type):
     if median_days is None:
         return False, "❌ Wrong file content: could not detect weekly/monthly frequency.", None
 
-    # Weekly should be around 7 days
-    # Monthly should be around 28-31 days
     if expected_type == "weekly_price":
         if median_days > 15:
             return False, "❌ This does NOT look like the Weekly Sale Price file.", None
@@ -160,52 +141,44 @@ def validate_zillow_csv(uploaded_file, expected_type):
 
 
 # ----------------------------
-# ✅ Upload Section (status shows under each uploader itself)
+# ✅ Upload Zillow Files (MAIN SCREEN)
 # ----------------------------
-st.sidebar.header("📤 Upload Zillow Files")
+st.subheader("📤 Upload Zillow Files")
 
-price_file = st.sidebar.file_uploader(
-    "Upload Weekly Median Sale Price CSV",
-    type=["csv"]
-)
-
+price_file = st.file_uploader("Upload Weekly Median Sale Price CSV", type=["csv"])
 price_ok = False
 zillow_price = None
 
 if price_file is not None:
     if price_file.name != EXPECTED_PRICE_FILENAME:
-        st.sidebar.warning(f"⚠️ File name is different than expected.\nExpected: {EXPECTED_PRICE_FILENAME}")
+        st.warning(f"⚠️ File name is different than expected.\nExpected: {EXPECTED_PRICE_FILENAME}")
 
     ok, msg, df_temp = validate_zillow_csv(price_file, "weekly_price")
     if ok:
-        st.sidebar.success(msg)
+        st.success(msg)
         price_ok = True
         zillow_price = df_temp
     else:
-        st.sidebar.error(msg)
+        st.error(msg)
 
-value_file = st.sidebar.file_uploader(
-    "Upload ZHVI Home Value Index CSV",
-    type=["csv"]
-)
-
+value_file = st.file_uploader("Upload ZHVI Home Value Index CSV", type=["csv"])
 value_ok = False
 zillow_value = None
 
 if value_file is not None:
     if value_file.name != EXPECTED_VALUE_FILENAME:
-        st.sidebar.warning(f"⚠️ File name is different than expected.\nExpected: {EXPECTED_VALUE_FILENAME}")
+        st.warning(f"⚠️ File name is different than expected.\nExpected: {EXPECTED_VALUE_FILENAME}")
 
     ok, msg, df_temp = validate_zillow_csv(value_file, "monthly_value")
     if ok:
-        st.sidebar.success(msg)
+        st.success(msg)
         value_ok = True
         zillow_value = df_temp
     else:
-        st.sidebar.error(msg)
+        st.error(msg)
 
 if not (price_ok and value_ok):
-    st.info("⬅️ Please upload the correct Zillow files to continue.")
+    st.info("✅ Upload both correct files to continue.")
     st.stop()
 
 
@@ -270,17 +243,17 @@ def regime_from_prob(p):
 
 
 # ----------------------------
-# ✅ Metro selection (auto-detect state from search)
+# ✅ Location selection (MAIN SCREEN)
 # ----------------------------
+st.subheader("🌎 Select Location")
+
 metro_list = sorted(
     set(zillow_price["RegionName"].dropna().unique()).intersection(
         set(zillow_value["RegionName"].dropna().unique())
     )
 )
 
-st.sidebar.header("🌎 Select Location")
-
-metro_search = st.sidebar.text_input("🔍 Search metro (optional)", "").strip()
+metro_search = st.text_input("🔍 Search metro (optional)", "").strip()
 
 states = sorted(list(set([m.split(",")[-1].strip() for m in metro_list if "," in m])))
 
@@ -297,7 +270,7 @@ if auto_state in states:
 else:
     default_state_index = 0
 
-selected_state = st.sidebar.selectbox("Choose State", states, index=default_state_index)
+selected_state = st.selectbox("Choose State", states, index=default_state_index)
 
 filtered_metros = [m for m in metro_list if m.endswith(f", {selected_state}")]
 
@@ -305,7 +278,7 @@ if metro_search:
     filtered_metros = [m for m in filtered_metros if metro_search.lower() in m.lower()]
 
 if len(filtered_metros) == 0:
-    st.sidebar.warning("⚠️ No metros found. Try another search or change state.")
+    st.warning("⚠️ No metros found. Try another search or change state.")
     st.stop()
 
 if auto_metro in filtered_metros:
@@ -313,14 +286,13 @@ if auto_metro in filtered_metros:
 else:
     default_metro_index = 0
 
-selected_metro = st.sidebar.selectbox("Choose Metro", filtered_metros, index=default_metro_index)
+selected_metro = st.selectbox("Choose Metro", filtered_metros, index=default_metro_index)
 
-st.sidebar.markdown("---")
-run_button = st.sidebar.button("✅ Run Forecast")
+run_button = st.button("✅ Run Forecast")
 
 
 # ----------------------------
-# ✅ Run model when button pressed
+# ✅ Run Model
 # ----------------------------
 if run_button:
     with st.spinner(f"⏳ Processing... Running forecast for {selected_metro}"):
@@ -461,7 +433,6 @@ if run_button:
             columns=["Time Horizon", "Price Up Chance (%)", "Price Down Chance (%)", "Outlook", "Suggested Action"]
         )
 
-        # Build weekly + monthly charts for 3-month horizon
         status.info("Step 5/5: Creating charts + weekly summary...")
         progress.progress(90)
 
@@ -508,7 +479,7 @@ if run_button:
         status.success("✅ Done! Forecast is ready.")
         progress.progress(100)
 
-    # ✅ Explanation box appears ONLY after run (above the table)
+    # ✅ Explanation after run (above table)
     with st.expander("ℹ️ What does this forecast mean? (Simple explanation)"):
         st.write("✅ **Price Up Chance (%)** = chance home prices may rise.")
         st.write("✅ **Price Down Chance (%)** = chance home prices may fall.")
@@ -517,7 +488,6 @@ if run_button:
         st.write("• 🟡 Unclear = mixed signals (could go up or down)")
         st.write("• 🔴 Risky = higher downside risk")
 
-    st.success("✅ Done! Forecast is ready.")
     st.subheader("✅ Forecast Results (All Time Horizons)")
     st.dataframe(out_df, use_container_width=True)
 
