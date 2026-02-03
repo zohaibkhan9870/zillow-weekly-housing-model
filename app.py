@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import requests
-from io import StringIO
 from datetime import datetime, timedelta
 from sklearn.ensemble import RandomForestClassifier
+
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -40,39 +40,35 @@ run_button = st.sidebar.button("✅ Run Weekly Model")
 
 
 # ----------------------------
-# FRED Loader (Safe + Cloud Friendly)
+# ✅ FRED API Loader (JSON Method)
 # ----------------------------
 def load_fred_series(series_id):
-    url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
+    api_key = st.secrets["FRED_API_KEY"]
 
-    r = requests.get(url, timeout=30)
+    url = "https://api.stlouisfed.org/fred/series/observations"
+    params = {
+        "series_id": series_id,
+        "api_key": api_key,
+        "file_type": "json"
+    }
+
+    r = requests.get(url, params=params, timeout=30)
 
     if r.status_code != 200:
-        raise Exception(f"FRED request failed for {series_id}. Status code: {r.status_code}")
+        raise Exception(f"FRED API request failed for {series_id}. Status: {r.status_code}")
 
-    # FRED can sometimes return HTML instead of CSV (blocked / error page)
-    first_line = r.text.splitlines()[0] if len(r.text.splitlines()) > 0 else ""
-    if "DATE" not in first_line:
-        raise Exception(
-            f"FRED did not return CSV for {series_id}. "
-            f"Unexpected response (maybe blocked by server)."
-        )
+    data = r.json()
 
-    df = pd.read_csv(StringIO(r.text))
+    if "observations" not in data:
+        raise Exception(f"Invalid API response for {series_id}")
 
-    df.columns = [c.strip() for c in df.columns]
+    df = pd.DataFrame(data["observations"])
+    df["date"] = pd.to_datetime(df["date"])
+    df["value"] = pd.to_numeric(df["value"], errors="coerce")
 
-    if "DATE" not in df.columns:
-        raise Exception(f"Missing DATE column in FRED response for {series_id}")
+    df.set_index("date", inplace=True)
 
-    df["DATE"] = pd.to_datetime(df["DATE"])
-    df.set_index("DATE", inplace=True)
-
-    # Replace missing values
-    df.replace(".", np.nan, inplace=True)
-    df = df.astype(float)
-
-    return df
+    return df[["value"]]
 
 
 # ----------------------------
@@ -119,20 +115,22 @@ if run_button:
     value = pd.DataFrame(value_matches.iloc[0, 5:])
 
     # ----------------------------
-    # Load FRED Data
+    # Load FRED Data using API Key
     # ----------------------------
     try:
-        interest = load_fred_series("MORTGAGE30US")
-        vacancy = load_fred_series("RRVRUSQ156N")
-        cpi = load_fred_series("CPIAUCSL")
+        # ✅ Rename values into correct column names
+        interest = load_fred_series("MORTGAGE30US").rename(columns={"value": "interest"})
+        vacancy = load_fred_series("RRVRUSQ156N").rename(columns={"value": "vacancy"})
+        cpi = load_fred_series("CPIAUCSL").rename(columns={"value": "cpi"})
 
         fed_data = pd.concat([interest, vacancy, cpi], axis=1)
-        fed_data.columns = ["interest", "vacancy", "cpi"]
         fed_data = fed_data.sort_index().ffill().dropna()
+
+        # Same adjustment as before
         fed_data.index = fed_data.index + timedelta(days=2)
 
     except Exception as e:
-        st.error("❌ Failed to fetch FRED data from St. Louis Fed.")
+        st.error("❌ Failed to fetch FRED data from St. Louis Fed using API.")
         st.write("Error details:", str(e))
         st.stop()
 
