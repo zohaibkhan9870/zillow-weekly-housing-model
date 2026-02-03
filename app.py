@@ -144,7 +144,9 @@ if run_button:
         progress = st.progress(0)
         status = st.empty()
 
-        # Step 1
+        # ----------------------------
+        # Step 1: Load selected metro
+        # ----------------------------
         status.info("Step 1/5: Loading metro data...")
         progress.progress(10)
 
@@ -158,7 +160,9 @@ if run_button:
         price = pd.DataFrame(price_matches.iloc[0, 5:])
         value = pd.DataFrame(value_matches.iloc[0, 5:])
 
-        # Step 2
+        # ----------------------------
+        # Step 2: Fetch FRED macro data
+        # ----------------------------
         status.info("Step 2/5: Fetching macro data from FRED...")
         progress.progress(30)
 
@@ -185,7 +189,9 @@ if run_button:
             st.write("Error details:", str(e))
             st.stop()
 
-        # Step 3
+        # ----------------------------
+        # Step 3: Prepare Zillow price + value
+        # ----------------------------
         status.info("Step 3/5: Preparing Zillow price/value data...")
         progress.progress(50)
 
@@ -202,7 +208,9 @@ if run_button:
 
         data = fed_data.merge(price_data, left_index=True, right_index=True)
 
-        # Step 4
+        # ----------------------------
+        # Step 4: Feature engineering
+        # ----------------------------
         status.info("Step 4/5: Building features + training models...")
         progress.progress(70)
 
@@ -247,7 +255,9 @@ if run_button:
             "1 Year Ahead": 52
         }
 
-        # Multi-horizon forecast
+        # ----------------------------
+        # Multi-horizon forecast table
+        # ----------------------------
         results = []
 
         for horizon_name, weeks_ahead in horizons.items():
@@ -285,7 +295,9 @@ if run_button:
 
         out_df = pd.DataFrame(results, columns=["Time Horizon", "Prob Price Up", "Outlook", "Suggested Action"])
 
-        # Step 5
+        # ----------------------------
+        # Step 5: Build 3-month model for charts/messages
+        # ----------------------------
         status.info("Step 5/5: Creating charts + weekly summary...")
         progress.progress(90)
 
@@ -333,7 +345,7 @@ if run_button:
         progress.progress(100)
 
     # ----------------------------
-    # OUTPUT: Forecast table + CSV
+    # ✅ OUTPUT: Forecast table + CSV
     # ----------------------------
     st.subheader("✅ Forecast Results (All Time Horizons)")
     st.dataframe(out_df, use_container_width=True)
@@ -347,41 +359,52 @@ if run_button:
     )
 
     # ----------------------------
-    # Weekly + Monthly message + Charts
+    # ✅ Weekly + Monthly Predictions + Suggested Action
     # ----------------------------
     if prob_data is None or monthly_signal is None:
         st.warning("Not enough data to build weekly graph and monthly trend yet.")
         st.stop()
 
-    st.subheader("📌 Simple Weekly + Monthly Message")
+    # ----------------------------
+    # ✅ Weekly Prediction (Separated)
+    # ----------------------------
+    st.subheader("📌 Weekly Prediction")
 
     latest_week_prob = float(prob_data["prob_up"].tail(1).values[0])
     weekly_label = friendly_label(latest_week_prob)
     weekly_action = simple_action(weekly_label)
 
+    if "🟢" in weekly_label:
+        st.success(f"✅ Weekly Outlook: {weekly_label}")
+        st.write("This week looks supportive. Prices are more likely to go up.")
+    elif "🔴" in weekly_label:
+        st.error(f"✅ Weekly Outlook: {weekly_label}")
+        st.write("This week looks risky. Prices may face downward pressure.")
+    else:
+        st.warning(f"✅ Weekly Outlook: {weekly_label}")
+        st.write("This week is unclear. Prices could move up or down.")
+
+    # ----------------------------
+    # ✅ Monthly Prediction (Separated)
+    # ----------------------------
+    st.subheader("📌 Monthly Prediction")
+
     latest_month_regime = monthly_signal["regime"].tail(1).values[0]
 
-    if "🟢" in weekly_label:
-        st.success(f"✅ This Week’s Outlook: {weekly_label}")
-        st.write("The market looks supportive. Prices are more likely to move up.")
-    elif "🔴" in weekly_label:
-        st.error(f"✅ This Week’s Outlook: {weekly_label}")
-        st.write("The market looks risky. Prices may face downward pressure.")
-    else:
-        st.warning(f"✅ This Week’s Outlook: {weekly_label}")
-        st.write("Mixed signs. Prices could go up or down.")
-
     if latest_month_regime == "Bull":
-        st.info("ℹ️ Bigger Trend (Monthly): 🟢 Growing trend")
-        st.write("The longer trend looks positive.")
+        st.info("ℹ️ Monthly Trend: 🟢 Growing trend")
+        st.write("The bigger monthly trend looks positive.")
     elif latest_month_regime == "Risk":
-        st.info("ℹ️ Bigger Trend (Monthly): 🔴 Weak trend")
-        st.write("The longer trend looks weak or risky.")
+        st.info("ℹ️ Monthly Trend: 🔴 Weak trend")
+        st.write("The bigger monthly trend looks weak or risky.")
     else:
-        st.info("ℹ️ Bigger Trend (Monthly): 🟡 Still unclear")
-        st.write("The longer trend is also not strong.")
+        st.info("ℹ️ Monthly Trend: 🟡 Still unclear")
+        st.write("The bigger monthly trend is still unclear.")
 
-    st.markdown("### 👉 Suggested Action")
+    # ----------------------------
+    # ✅ Suggested Action (Separate Heading)
+    # ----------------------------
+    st.subheader("👉 Suggested Action")
     st.write(weekly_action)
 
     # ----------------------------
@@ -454,7 +477,6 @@ if run_button:
     ax.set_ylim(0, 1)
     ax.grid(alpha=0.3)
 
-    # ✅ Explanation text INSIDE the image (below the chart)
     explanation_text = (
         "HOW TO READ THIS CHART (Simple)\n"
         "• Black line with dots: Weekly outlook score (higher = better).\n"
