@@ -86,10 +86,29 @@ if not confirm_download:
 
 
 # ----------------------------
-# ✅ File Validation (Name + Content)
+# ✅ File Validation (Name + Content)  ✅ FIXED
 # ----------------------------
 EXPECTED_PRICE_FILENAME = "Metro_median_sale_price_uc_sfrcondo_sm_week.csv"
 EXPECTED_VALUE_FILENAME = "Metro_zhvi_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv"
+
+
+def safe_median_date_diff_days(parsed_dates: pd.DatetimeIndex):
+    """
+    Returns median difference in days between sorted dates.
+    If can't compute safely, returns None.
+    """
+    if parsed_dates is None or len(parsed_dates) < 2:
+        return None
+
+    sorted_dates = pd.Series(parsed_dates).sort_values().reset_index(drop=True)
+    diffs = sorted_dates.diff().dropna()
+
+    if diffs.empty:
+        return None
+
+    # diffs is Timedelta series now
+    median_days = diffs.dt.total_seconds().median() / (60 * 60 * 24)
+    return median_days
 
 
 def validate_zillow_csv(uploaded_file, expected_type):
@@ -106,33 +125,35 @@ def validate_zillow_csv(uploaded_file, expected_type):
     if "RegionName" not in df.columns:
         return False, "❌ Wrong file content: missing required column 'RegionName'.", None
 
-    # Must have date-like columns after col index 5
+    # Must have enough columns (time series should exist)
     if df.shape[1] < 10:
         return False, "❌ Wrong file content: not enough columns (missing time series).", None
 
-    # Basic Metro structure check
+    # Metro format check
     sample_regions = df["RegionName"].dropna().astype(str).head(30).tolist()
     if not any("," in x for x in sample_regions):
         return False, "❌ Wrong file content: RegionName does not look like metro format (City, ST).", None
 
-    # Check if it's weekly or monthly based on date column spacing
+    # Detect date columns
     date_cols = list(df.columns[5:])
     parsed_dates = pd.to_datetime(date_cols, errors="coerce").dropna()
 
     if len(parsed_dates) < 10:
-        return False, "❌ Wrong file content: date columns could not be detected.", None
+        return False, "❌ Wrong file content: could not detect enough valid date columns.", None
 
-    diffs = parsed_dates.sort_values().diff().dropna()
-    median_days = diffs.dt.days.median()
+    median_days = safe_median_date_diff_days(parsed_dates)
+
+    if median_days is None:
+        return False, "❌ Wrong file content: could not detect weekly/monthly frequency.", None
 
     # Weekly should be around 7 days
     # Monthly should be around 28-31 days
     if expected_type == "weekly_price":
-        if median_days is None or median_days > 15:
+        if median_days > 15:
             return False, "❌ This does NOT look like the Weekly Sale Price file.", None
 
     if expected_type == "monthly_value":
-        if median_days is None or median_days < 20:
+        if median_days < 20:
             return False, "❌ This does NOT look like the Monthly ZHVI file.", None
 
     return True, "✅ Correct file uploaded.", df
@@ -152,7 +173,6 @@ price_ok = False
 zillow_price = None
 
 if price_file is not None:
-    # Name check (warning only)
     if price_file.name != EXPECTED_PRICE_FILENAME:
         st.sidebar.warning(f"⚠️ File name is different than expected.\nExpected: {EXPECTED_PRICE_FILENAME}")
 
@@ -173,7 +193,6 @@ value_ok = False
 zillow_value = None
 
 if value_file is not None:
-    # Name check (warning only)
     if value_file.name != EXPECTED_VALUE_FILENAME:
         st.sidebar.warning(f"⚠️ File name is different than expected.\nExpected: {EXPECTED_VALUE_FILENAME}")
 
@@ -301,7 +320,7 @@ run_button = st.sidebar.button("✅ Run Forecast")
 
 
 # ----------------------------
-# ✅ STEP 2: Run model when button pressed
+# ✅ Run model when button pressed
 # ----------------------------
 if run_button:
     with st.spinner(f"⏳ Processing... Running forecast for {selected_metro}"):
@@ -442,7 +461,7 @@ if run_button:
             columns=["Time Horizon", "Price Up Chance (%)", "Price Down Chance (%)", "Outlook", "Suggested Action"]
         )
 
-        # 3 month horizon for weekly + monthly charts/messages
+        # Build weekly + monthly charts for 3-month horizon
         status.info("Step 5/5: Creating charts + weekly summary...")
         progress.progress(90)
 
@@ -489,7 +508,7 @@ if run_button:
         status.success("✅ Done! Forecast is ready.")
         progress.progress(100)
 
-    # ✅ EXPLANATION BOX ONLY AFTER RUN (Above table)
+    # ✅ Explanation box appears ONLY after run (above the table)
     with st.expander("ℹ️ What does this forecast mean? (Simple explanation)"):
         st.write("✅ **Price Up Chance (%)** = chance home prices may rise.")
         st.write("✅ **Price Down Chance (%)** = chance home prices may fall.")
@@ -498,7 +517,7 @@ if run_button:
         st.write("• 🟡 Unclear = mixed signals (could go up or down)")
         st.write("• 🔴 Risky = higher downside risk")
 
-    # ✅ Forecast table
+    st.success("✅ Done! Forecast is ready.")
     st.subheader("✅ Forecast Results (All Time Horizons)")
     st.dataframe(out_df, use_container_width=True)
 
@@ -510,7 +529,6 @@ if run_button:
         mime="text/csv"
     )
 
-    # ✅ Weekly + Monthly if available
     if prob_data is None or monthly_signal is None:
         st.warning("Not enough data to build weekly graph and monthly trend yet.")
         st.stop()
@@ -551,7 +569,7 @@ if run_button:
     st.subheader("👉 Suggested Action")
     st.write(weekly_action)
 
-    # Chart 1: Price trend + risk zones
+    # Chart 1
     st.subheader("📈 Price Trend + Risk Background (3-Month Outlook)")
 
     fig1 = plt.figure(figsize=(14, 6))
@@ -593,7 +611,7 @@ if run_button:
     plt.tight_layout()
     st.pyplot(fig1)
 
-    # Chart 2: Weekly outlook last 12 weeks
+    # Chart 2
     st.subheader("📊 Weekly Outlook (Last 12 Weeks)")
 
     recent = prob_data.tail(12)
