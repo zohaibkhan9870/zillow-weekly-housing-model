@@ -256,7 +256,7 @@ if run_button:
         }
 
         # ----------------------------
-        # Multi-horizon forecast table
+        # ✅ Multi-horizon forecast (UPDATED TABLE OUTPUT)
         # ----------------------------
         results = []
 
@@ -267,7 +267,7 @@ if run_button:
             temp.dropna(inplace=True)
 
             if temp.shape[0] <= START:
-                results.append([horizon_name, None, "Not enough data", "-"])
+                results.append([horizon_name, None, None, "Not enough data", "-"])
                 continue
 
             def predict_proba(train, test):
@@ -288,12 +288,19 @@ if run_button:
             pred_df["prob_up"] = probs
 
             latest_prob = float(pred_df["prob_up"].tail(1).values[0])
+
+            up_pct = round(latest_prob * 100, 0)
+            down_pct = round((1 - latest_prob) * 100, 0)
+
             label = friendly_label(latest_prob)
             action = simple_action(label)
 
-            results.append([horizon_name, round(latest_prob, 2), label, action])
+            results.append([horizon_name, f"{int(up_pct)}%", f"{int(down_pct)}%", label, action])
 
-        out_df = pd.DataFrame(results, columns=["Time Horizon", "Prob Price Up", "Outlook", "Suggested Action"])
+        out_df = pd.DataFrame(
+            results,
+            columns=["Time Horizon", "Price Up Chance (%)", "Price Down Chance (%)", "Outlook", "Suggested Action"]
+        )
 
         # ----------------------------
         # Step 5: Build 3-month model for charts/messages
@@ -365,9 +372,7 @@ if run_button:
         st.warning("Not enough data to build weekly graph and monthly trend yet.")
         st.stop()
 
-    # ----------------------------
-    # ✅ Weekly Prediction (Separated)
-    # ----------------------------
+    # Weekly Prediction
     st.subheader("📌 Weekly Prediction")
 
     latest_week_prob = float(prob_data["prob_up"].tail(1).values[0])
@@ -384,9 +389,7 @@ if run_button:
         st.warning(f"✅ Weekly Outlook: {weekly_label}")
         st.write("This week is unclear. Prices could move up or down.")
 
-    # ----------------------------
-    # ✅ Monthly Prediction (Separated)
-    # ----------------------------
+    # Monthly Prediction
     st.subheader("📌 Monthly Prediction")
 
     latest_month_regime = monthly_signal["regime"].tail(1).values[0]
@@ -401,9 +404,7 @@ if run_button:
         st.info("ℹ️ Monthly Trend: 🟡 Still unclear")
         st.write("The bigger monthly trend is still unclear.")
 
-    # ----------------------------
-    # ✅ Suggested Action (Separate Heading)
-    # ----------------------------
+    # Suggested Action
     st.subheader("👉 Suggested Action")
     st.write(weekly_action)
 
