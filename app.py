@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import requests
-from datetime import datetime, timedelta
+from datetime import timedelta
 from sklearn.ensemble import RandomForestClassifier
 
 import matplotlib
@@ -118,15 +118,12 @@ if run_button:
     # Load FRED Data using API Key
     # ----------------------------
     try:
-        # ✅ Rename values into correct column names
         interest = load_fred_series("MORTGAGE30US").rename(columns={"value": "interest"})
         vacancy = load_fred_series("RRVRUSQ156N").rename(columns={"value": "vacancy"})
         cpi = load_fred_series("CPIAUCSL").rename(columns={"value": "cpi"})
 
         fed_data = pd.concat([interest, vacancy, cpi], axis=1)
         fed_data = fed_data.sort_index().ffill().dropna()
-
-        # Same adjustment as before
         fed_data.index = fed_data.index + timedelta(days=2)
 
     except Exception as e:
@@ -320,21 +317,48 @@ if run_button:
 
     st.pyplot(fig2)
 
-    # ----------------------------
-    # Plain English Message
-    # ----------------------------
+    # ============================================================
+    # ✅ Plain-English Investor Message (LIKE YOUR COLAB VERSION)
+    # ============================================================
     st.subheader("📌 Plain-English Investor Message")
 
-    latest = prob_data.tail(1)
-    regime_now = latest["regime"].values[0]
-    prob_now = latest["prob_up"].values[0]
+    latest_week = prob_data.tail(1)
+    latest_month = monthly_signal.tail(1)
 
-    if regime_now == "Bull":
-        st.success(f"🟢 FAVORABLE HOUSING ENVIRONMENT (prob_up={prob_now:.2f})")
-        st.write("The model expects supportive conditions for housing prices over the next quarter.")
-    elif regime_now == "Neutral":
-        st.warning(f"🟡 MIXED HOUSING ENVIRONMENT (prob_up={prob_now:.2f})")
-        st.write("The model sees an unclear outlook for housing prices over the next quarter.")
+    regime = latest_week["regime"].values[0]
+    prob = latest_week["prob_up"].values[0]
+    month_regime = latest_month["regime"].values[0]
+
+    # ---- Box 1 (same style as Colab)
+    st.text("\n" + "=" * 50)
+
+    if regime == "Bull":
+        st.text("🟢 FAVORABLE HOUSING ENVIRONMENT")
+        st.text("The model expects supportive conditions for housing prices over the next quarter.")
+    elif regime == "Neutral":
+        st.text("🟡 MIXED HOUSING ENVIRONMENT")
+        st.text("The model sees an unclear outlook for housing prices over the next quarter.")
     else:
-        st.error(f"🔴 RISK ENVIRONMENT (prob_up={prob_now:.2f})")
-        st.write("The model expects downside pressure in housing prices over the next quarter.")
+        st.text("🔴 RISK ENVIRONMENT")
+        st.text("The model expects downside pressure in housing prices over the next quarter.")
+
+    st.text("=" * 50 + "\n")
+
+    # ---- Box 2 (Decision Dashboard)
+    st.text("\n" + "=" * 60)
+
+    if regime == "Bull":
+        st.text("🟢 BULL ENVIRONMENT")
+        st.text("Housing conditions are supportive. Upside risk dominates over the next quarter.")
+    elif regime == "Neutral":
+        st.text("🟡 NEUTRAL ENVIRONMENT")
+        st.text("Housing conditions are mixed. No strong directional edge right now.")
+    else:
+        st.text("🔴 RISK ENVIRONMENT")
+        st.text("Downside risk is elevated. Caution is warranted for housing exposure.")
+
+    st.text("\nContext:")
+    st.text(f"• Weekly signal: {regime}")
+    st.text(f"• Monthly trend: {month_regime}")
+
+    st.text("=" * 60 + "\n")
