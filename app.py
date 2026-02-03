@@ -33,22 +33,35 @@ file_status = st.sidebar.radio(
 # If user needs help downloading
 if file_status == "⬇️ No, I need to download them":
     st.sidebar.markdown("### ✅ Step 1: Open Zillow Research Page")
-    st.sidebar.markdown("👉 Official Zillow Research Website:")
-    st.sidebar.markdown("**https://www.zillow.com/research/data/**")
 
-    # clickable link
+    # ✅ only button (no raw link, no extra text)
     st.sidebar.link_button("🌐 Open Zillow Data Page", "https://www.zillow.com/research/data/")
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("### ✅ Step 2: Download these 2 CSV files")
 
+    # ✅ Visible file name style (no scroll)
     st.sidebar.markdown("#### 🏠 Home Values Section")
     st.sidebar.markdown("Download **ZHVI (Home Value Index)** CSV:")
-    st.sidebar.code("Metro_zhvi_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv")
+    st.sidebar.markdown(
+        """
+        <div style="background-color:#111827; padding:12px; border-radius:10px; font-size:14px;">
+            <b>Metro_zhvi_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv</b>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
     st.sidebar.markdown("#### 💰 Sales Section")
     st.sidebar.markdown("Download **Median Sale Price (Weekly)** CSV:")
-    st.sidebar.code("Metro_median_sale_price_uc_sfrcondo_sm_week.csv")
+    st.sidebar.markdown(
+        """
+        <div style="background-color:#111827; padding:12px; border-radius:10px; font-size:14px;">
+            <b>Metro_median_sale_price_uc_sfrcondo_sm_week.csv</b>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
     st.sidebar.markdown("---")
     st.sidebar.info("✅ After downloading both files, come back and select 'Yes' above to upload them.")
