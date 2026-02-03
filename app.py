@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from pandas_datareader import data as pdr
+import requests
 from datetime import datetime, timedelta
 from sklearn.ensemble import RandomForestClassifier
 import matplotlib.pyplot as plt
@@ -71,16 +71,33 @@ if run_button:
     value = pd.DataFrame(value_matches.iloc[0, 5:])
 
     # ----------------------------
-    # Load FRED data (AUTO)
-    # ----------------------------
-    start = "1950-01-01"
-    end = datetime.today()
+ # ----------------------------
+# Load FRED data (NO pandas_datareader)
+# ----------------------------
+def load_fred_series(series_id):
+    url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
+    df = pd.read_csv(url)
+    df["DATE"] = pd.to_datetime(df["DATE"])
+    df.set_index("DATE", inplace=True)
+    df.replace(".", np.nan, inplace=True)
+    df = df.astype(float)
+    return df
 
-    fed_data = pd.concat([
-        pdr.DataReader("MORTGAGE30US", "fred", start, end),
-        pdr.DataReader("RRVRUSQ156N", "fred", start, end),
-        pdr.DataReader("CPIAUCSL", "fred", start, end),
-    ], axis=1)
+try:
+    interest = load_fred_series("MORTGAGE30US")
+    vacancy = load_fred_series("RRVRUSQ156N")
+    cpi = load_fred_series("CPIAUCSL")
+
+    fed_data = pd.concat([interest, vacancy, cpi], axis=1)
+    fed_data.columns = ["interest", "vacancy", "cpi"]
+    fed_data = fed_data.sort_index().ffill().dropna()
+    fed_data.index = fed_data.index + timedelta(days=2)
+
+except Exception as e:
+    st.error("❌ Failed to fetch FRED data from St. Louis Fed.")
+    st.write(e)
+    st.stop()
+
 
     fed_data.columns = ["interest", "vacancy", "cpi"]
     fed_data = fed_data.sort_index().ffill().dropna()
