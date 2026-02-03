@@ -21,7 +21,7 @@ st.write("Upload Zillow files → select State & Metro → get price outlook for
 
 
 # ----------------------------
-# ✅ Reset Button (NEW)
+# ✅ Reset Button
 # ----------------------------
 st.sidebar.markdown("---")
 if st.sidebar.button("🔄 Reset / Clear All"):
@@ -75,45 +75,48 @@ if file_status == "⬇️ No, I need to download them":
 
 
 # ----------------------------
-# ✅ Checkbox confirmation before upload (NEW)
+# ✅ Checkbox confirmation before upload
 # ----------------------------
 st.sidebar.markdown("---")
 confirm_download = st.sidebar.checkbox("✅ I downloaded both Zillow CSV files")
 
-
-# ----------------------------
-# Uploads (only after confirmation)
-# ----------------------------
-if confirm_download:
-    st.sidebar.header("📤 Upload Zillow Files")
-
-    price_file = st.sidebar.file_uploader(
-        "Upload Weekly Median Sale Price CSV",
-        type=["csv"]
-    )
-
-    value_file = st.sidebar.file_uploader(
-        "Upload ZHVI Home Value Index CSV",
-        type=["csv"]
-    )
-
-    # ✅ Upload Status (NEW)
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("✅ Upload Status")
-
-    if price_file is not None:
-        st.sidebar.success("✅ Median Sale Price file uploaded")
-    else:
-        st.sidebar.error("❌ Median Sale Price file missing")
-
-    if value_file is not None:
-        st.sidebar.success("✅ ZHVI file uploaded")
-    else:
-        st.sidebar.error("❌ ZHVI file missing")
-
-else:
+if not confirm_download:
     st.info("✅ Please confirm you downloaded both Zillow CSV files to unlock uploads.")
     st.stop()
+
+
+# ----------------------------
+# ✅ Upload Section (with Upload Status directly under it)
+# ----------------------------
+st.sidebar.header("📤 Upload Zillow Files")
+
+# Uploads
+price_file = st.sidebar.file_uploader(
+    "Upload Weekly Median Sale Price CSV",
+    type=["csv"]
+)
+
+value_file = st.sidebar.file_uploader(
+    "Upload ZHVI Home Value Index CSV",
+    type=["csv"]
+)
+
+# ✅ Upload Status RIGHT HERE (compact, no extra spacing)
+st.sidebar.markdown("### ✅ Upload Status")
+
+col1, col2 = st.sidebar.columns(2)
+
+with col1:
+    if price_file is not None:
+        st.success("Sale Price ✅")
+    else:
+        st.error("Sale Price ❌")
+
+with col2:
+    if value_file is not None:
+        st.success("ZHVI ✅")
+    else:
+        st.error("ZHVI ❌")
 
 
 # ----------------------------
@@ -177,7 +180,7 @@ def regime_from_prob(p):
 
 
 # ----------------------------
-# ✅ What does this forecast mean? (NEW)
+# ✅ What does this forecast mean?
 # ----------------------------
 st.markdown("---")
 with st.expander("ℹ️ What does this forecast mean? (Simple explanation)"):
@@ -215,28 +218,47 @@ if price_file and value_file:
 
     st.sidebar.header("🌎 Select Location")
 
-    # ✅ Metro Search filter (NEW)
-    metro_search = st.sidebar.text_input("🔍 Search metro (optional)", "")
+    # ✅ Metro Search input
+    metro_search = st.sidebar.text_input("🔍 Search metro (optional)", "").strip()
 
-    # States dropdown
+    # Build states list
     states = sorted(list(set([m.split(",")[-1].strip() for m in metro_list if "," in m])))
-    selected_state = st.sidebar.selectbox("Choose State", states)
+
+    # ✅ AUTO-DETECT STATE if user types a metro
+    auto_state = None
+    auto_metro = None
+    if metro_search:
+        matches = [m for m in metro_list if metro_search.lower() in m.lower()]
+        if len(matches) > 0:
+            auto_metro = matches[0]
+            auto_state = auto_metro.split(",")[-1].strip()
+
+    # Set default state index if auto_state found
+    if auto_state in states:
+        default_state_index = states.index(auto_state)
+    else:
+        default_state_index = 0
+
+    selected_state = st.sidebar.selectbox("Choose State", states, index=default_state_index)
 
     # Filter metros by selected state
     filtered_metros = [m for m in metro_list if m.endswith(f", {selected_state}")]
 
-    # Apply search filter
-    if metro_search.strip():
-        filtered_metros = [
-            m for m in filtered_metros
-            if metro_search.lower() in m.lower()
-        ]
+    # Further filter metros by search input
+    if metro_search:
+        filtered_metros = [m for m in filtered_metros if metro_search.lower() in m.lower()]
 
     if len(filtered_metros) == 0:
-        st.sidebar.warning("⚠️ No metros found. Try another search.")
+        st.sidebar.warning("⚠️ No metros found. Try another search or change state.")
         st.stop()
 
-    selected_metro = st.sidebar.selectbox("Choose Metro", filtered_metros)
+    # Auto-select metro if found
+    if auto_metro in filtered_metros:
+        default_metro_index = filtered_metros.index(auto_metro)
+    else:
+        default_metro_index = 0
+
+    selected_metro = st.sidebar.selectbox("Choose Metro", filtered_metros, index=default_metro_index)
 
     st.sidebar.markdown("---")
     run_button = st.sidebar.button("✅ Run Forecast")
