@@ -70,7 +70,7 @@ def load_fred_series(series_id):
 
 
 # ----------------------------
-# Helper: simple label for users
+# Helper functions
 # ----------------------------
 def friendly_label(prob_up):
     if prob_up >= 0.65:
@@ -88,6 +88,15 @@ def simple_action(label):
         return "Be careful — risk is high."
     else:
         return "Wait and monitor the market."
+
+
+def regime_from_prob(p):
+    if p >= 0.65:
+        return "Bull"
+    elif p <= 0.45:
+        return "Risk"
+    else:
+        return "Neutral"
 
 
 # ----------------------------
@@ -141,7 +150,6 @@ if run_button:
         vacancy = load_fred_series("RRVRUSQ156N").rename(columns={"value": "vacancy"})
         cpi = load_fred_series("CPIAUCSL").rename(columns={"value": "cpi"})
 
-        # ✅ NEW indicators
         unemployment = load_fred_series("UNRATE").rename(columns={"value": "unemployment"})
         jobs = load_fred_series("PAYEMS").rename(columns={"value": "jobs"})
         permits = load_fred_series("PERMIT").rename(columns={"value": "permits"})
@@ -152,10 +160,7 @@ if run_button:
             axis=1
         )
 
-        # Fill missing values
         fed_data = fed_data.sort_index().ffill().dropna()
-
-        # Small alignment fix
         fed_data.index = fed_data.index + timedelta(days=2)
 
     except Exception as e:
@@ -191,7 +196,6 @@ if run_button:
     data["price_13w_change"] = data["adj_price"].pct_change(13)
     data["value_52w_change"] = data["adj_value"].pct_change(52)
 
-    # New macro trend features
     data["unemployment_13w_change"] = data["unemployment"].pct_change(13)
     data["jobs_13w_change"] = data["jobs"].pct_change(13)
     data["permits_13w_change"] = data["permits"].pct_change(13)
@@ -199,9 +203,6 @@ if run_button:
 
     data.dropna(inplace=True)
 
-    # ----------------------------
-    # Predictors
-    # ----------------------------
     predictors = [
         "adj_price",
         "adj_value",
@@ -220,7 +221,7 @@ if run_button:
     ]
 
     # ----------------------------
-    # Multi-Horizon Forecast Setup
+    # Multi-Horizon Forecast
     # ----------------------------
     horizons = {
         "1 Month Ahead": 4,
@@ -237,8 +238,6 @@ if run_button:
 
     for horizon_name, weeks_ahead in horizons.items():
         temp = data.copy()
-
-        # target: is price higher after X weeks?
         temp["future_price"] = temp["adj_price"].shift(-weeks_ahead)
         temp["target"] = (temp["future_price"] > temp["adj_price"]).astype(int)
         temp.dropna(inplace=True)
@@ -253,7 +252,6 @@ if run_button:
             return rf.predict_proba(test[predictors])[:, 1]
 
         all_probs = []
-
         for i in range(START, temp.shape[0], STEP):
             train = temp.iloc[:i]
             test = temp.iloc[i:i + STEP]
@@ -271,113 +269,164 @@ if run_button:
 
         results.append([horizon_name, round(latest_prob, 2), label, action])
 
-    # ----------------------------
-    # Show Results Table
-    # ----------------------------
-    st.subheader("✅ Forecast Results (All Time Horizons)")
-
     out_df = pd.DataFrame(
         results,
         columns=["Time Horizon", "Prob Price Up", "Outlook", "Suggested Action"]
     )
 
+    st.subheader("✅ Forecast Results (All Time Horizons)")
     st.dataframe(out_df, use_container_width=True)
 
     # ----------------------------
-    # Highlight MAIN message (3 months)
+    # Build 3-month model outputs (for weekly graph + monthly trend)
     # ----------------------------
-    st.subheader("📌 Simple Summary (Main Outlook)")
-
-    main_row = out_df[out_df["Time Horizon"] == "3 Months Ahead"].iloc[0]
-
-    if "🟢" in main_row["Outlook"]:
-        st.success(f"3 Months Ahead Outlook: {main_row['Outlook']} (Prob Up = {main_row['Prob Price Up']})")
-    elif "🔴" in main_row["Outlook"]:
-        st.error(f"3 Months Ahead Outlook: {main_row['Outlook']} (Prob Up = {main_row['Prob Price Up']})")
-    else:
-        st.warning(f"3 Months Ahead Outlook: {main_row['Outlook']} (Prob Up = {main_row['Prob Price Up']})")
-
-    st.write("👉 Suggested Action:", main_row["Suggested Action"])
-
-    # ----------------------------
-    # Optional Charts (keep your charts)
-    # ----------------------------
-    st.subheader("📈 Price Trend + Risk Background (Based on 3-Month Model)")
-
-    # Build regime for 3-month horizon just for background coloring
     horizon_weeks = 13
     temp3 = data.copy()
     temp3["future_price"] = temp3["adj_price"].shift(-horizon_weeks)
     temp3["target"] = (temp3["future_price"] > temp3["adj_price"]).astype(int)
     temp3.dropna(inplace=True)
 
-    if temp3.shape[0] > START:
-        all_probs_3 = []
+    if temp3.shape[0] <= START:
+        st.warning("Not enough data to build weekly graph and monthly trend yet.")
+        st.stop()
 
-        def predict_proba_3(train, test):
-            rf = RandomForestClassifier(min_samples_split=10, random_state=1)
-            rf.fit(train[predictors], train["target"])
-            return rf.predict_proba(test[predictors])[:, 1]
+    def predict_proba_3(train, test):
+        rf = RandomForestClassifier(min_samples_split=10, random_state=1)
+        rf.fit(train[predictors], train["target"])
+        return rf.predict_proba(test[predictors])[:, 1]
 
-        for i in range(START, temp3.shape[0], STEP):
-            train = temp3.iloc[:i]
-            test = temp3.iloc[i:i + STEP]
-            if len(test) == 0:
-                continue
-            all_probs_3.append(predict_proba_3(train, test))
+    all_probs_3 = []
+    for i in range(START, temp3.shape[0], STEP):
+        train = temp3.iloc[:i]
+        test = temp3.iloc[i:i + STEP]
+        if len(test) == 0:
+            continue
+        all_probs_3.append(predict_proba_3(train, test))
 
-        probs3 = np.concatenate(all_probs_3)
-        prob_data = temp3.iloc[START:].copy()
-        prob_data["prob_up"] = probs3
+    probs3 = np.concatenate(all_probs_3)
 
-        def label_zone(p):
-            if p >= 0.65:
-                return "Bull"
-            elif p <= 0.45:
-                return "Risk"
-            else:
-                return "Neutral"
+    prob_data = temp3.iloc[START:].copy()
+    prob_data["prob_up"] = probs3
+    prob_data["regime"] = prob_data["prob_up"].apply(regime_from_prob)
 
-        prob_data["regime"] = prob_data["prob_up"].apply(label_zone)
+    # Monthly trend from 3-month model
+    monthly = prob_data.copy()
+    monthly["month"] = monthly.index.to_period("M")
 
-        fig1 = plt.figure(figsize=(14, 6))
+    monthly_signal = (
+        monthly.groupby("month")
+        .agg({
+            "prob_up": "mean",
+            "regime": lambda x: x.value_counts().index[0]
+        })
+    )
 
-        plt.plot(
-            prob_data.index,
-            prob_data["adj_price"],
-            color="black",
-            linewidth=2,
-            label="Real Home Price"
-        )
+    # ----------------------------
+    # ✅ Friendly Weekly + Monthly Message (Option A)
+    # ----------------------------
+    st.subheader("📌 Simple Weekly + Monthly Message")
 
-        for i in range(len(prob_data) - 1):
-            regime = prob_data["regime"].iloc[i]
-            if regime == "Bull":
-                color = "green"
-            elif regime == "Neutral":
-                color = "gold"
-            else:
-                color = "red"
+    latest_week_prob = float(prob_data["prob_up"].tail(1).values[0])
+    latest_week_regime = regime_from_prob(latest_week_prob)
 
-            plt.axvspan(prob_data.index[i], prob_data.index[i + 1], color=color, alpha=0.12)
+    latest_month_regime = monthly_signal["regime"].tail(1).values[0]
 
-        plt.title(f"{metro_name} Housing Price Trend (With Risk Zones)", fontsize=14, weight="bold")
-        plt.ylabel("Inflation-Adjusted Price")
-        plt.xlabel("Date")
+    weekly_outlook_label = friendly_label(latest_week_prob)
+    weekly_action = simple_action(weekly_outlook_label)
 
-        legend_elements = [
-            Patch(facecolor="green", alpha=0.25, label="Supportive"),
-            Patch(facecolor="gold", alpha=0.25, label="Unclear"),
-            Patch(facecolor="red", alpha=0.25, label="Risky"),
-        ]
-
-        plt.legend(
-            handles=[plt.Line2D([0], [0], color="black", lw=2, label="Real Price")] + legend_elements,
-            loc="upper left"
-        )
-
-        plt.tight_layout()
-        st.pyplot(fig1)
-
+    # Weekly box
+    if "🟢" in weekly_outlook_label:
+        st.success(f"✅ This Week’s Outlook: {weekly_outlook_label}")
+        st.write("The market looks supportive. Prices are more likely to move up.")
+    elif "🔴" in weekly_outlook_label:
+        st.error(f"✅ This Week’s Outlook: {weekly_outlook_label}")
+        st.write("The market looks risky. Prices may face downward pressure.")
     else:
-        st.warning("Not enough data to show charts for the 3-month model yet.")
+        st.warning(f"✅ This Week’s Outlook: {weekly_outlook_label}")
+        st.write("Mixed signs. Prices could go up or down.")
+
+    # Monthly trend box
+    if latest_month_regime == "Bull":
+        st.info("ℹ️ Bigger Trend (Monthly): 🟢 Growing trend")
+        st.write("The longer trend looks positive.")
+    elif latest_month_regime == "Risk":
+        st.info("ℹ️ Bigger Trend (Monthly): 🔴 Weak trend")
+        st.write("The longer trend looks weak or risky.")
+    else:
+        st.info("ℹ️ Bigger Trend (Monthly): 🟡 Still unclear")
+        st.write("The longer trend is also not strong.")
+
+    st.markdown("### 👉 Suggested Action")
+    st.write(weekly_action)
+
+    # ----------------------------
+    # CHART 1: Price Trend + Risk Background (3-month model)
+    # ----------------------------
+    st.subheader("📈 Price Trend + Risk Background (3-Month Outlook)")
+
+    fig1 = plt.figure(figsize=(14, 6))
+
+    plt.plot(
+        prob_data.index,
+        prob_data["adj_price"],
+        color="black",
+        linewidth=2,
+        label="Real Home Price (Inflation-Adjusted)"
+    )
+
+    for i in range(len(prob_data) - 1):
+        regime = prob_data["regime"].iloc[i]
+        if regime == "Bull":
+            color = "green"
+        elif regime == "Neutral":
+            color = "gold"
+        else:
+            color = "red"
+
+        plt.axvspan(prob_data.index[i], prob_data.index[i + 1], color=color, alpha=0.12)
+
+    plt.title(f"{metro_name} Housing Price Trend (With Risk Zones)", fontsize=14, weight="bold")
+    plt.ylabel("Inflation-Adjusted Price")
+    plt.xlabel("Date")
+
+    legend_elements = [
+        Patch(facecolor="green", alpha=0.25, label="Supportive"),
+        Patch(facecolor="gold", alpha=0.25, label="Unclear"),
+        Patch(facecolor="red", alpha=0.25, label="Risky"),
+    ]
+
+    plt.legend(
+        handles=[plt.Line2D([0], [0], color="black", lw=2, label="Real Price")] + legend_elements,
+        loc="upper left"
+    )
+
+    plt.tight_layout()
+    st.pyplot(fig1)
+
+    # ----------------------------
+    # ✅ CHART 2: Weekly Graph (Last 12 Weeks)
+    # ----------------------------
+    st.subheader("📊 Weekly Outlook (Last 12 Weeks)")
+
+    recent = prob_data.tail(12)
+
+    fig2, ax = plt.subplots(figsize=(12, 6))
+
+    ax.plot(
+        recent.index,
+        recent["prob_up"],
+        marker="o",
+        linewidth=2.5,
+        color="black"
+    )
+
+    ax.axhline(0.65, color="green", linestyle="--", alpha=0.6)
+    ax.axhline(0.45, color="red", linestyle="--", alpha=0.6)
+
+    ax.set_title("Weekly Housing Outlook (Last 12 Weeks)", fontsize=14, weight="bold")
+    ax.set_ylabel("Outlook Score (0 to 1)")
+    ax.set_xlabel("Week")
+    ax.set_ylim(0, 1)
+    ax.grid(alpha=0.3)
+
+    st.pyplot(fig2)
