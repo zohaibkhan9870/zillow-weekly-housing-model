@@ -1,6 +1,9 @@
+streamlit
+altair
 pandas
 numpy
 matplotlib
 scikit-learn
 pandas_datareader
-streamlit
+requests
+lxml
