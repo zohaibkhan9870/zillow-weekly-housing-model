@@ -2,18 +2,26 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import requests
+from io import StringIO
 from datetime import datetime, timedelta
 from sklearn.ensemble import RandomForestClassifier
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
-st.set_page_config(page_title="Weekly Zillow Housing Model", layout="wide")
-
-st.title("🏠 Weekly Zillow Housing Model (Metro-Based)")
-st.write("Upload the two Zillow CSV files and run the model metro-wise.")
 
 # ----------------------------
-# Upload CSV Files
+# Streamlit Setup
+# ----------------------------
+st.set_page_config(page_title="Weekly Zillow Housing Model", layout="wide")
+
+st.title("🏡 Weekly Zillow Housing Model (Metro-Based)")
+st.write("Upload the two Zillow CSV files and run the model metro-wise.")
+
+
+# ----------------------------
+# Sidebar Uploads + Inputs
 # ----------------------------
 st.sidebar.header("📂 Upload Zillow Files")
 
@@ -28,9 +36,48 @@ value_file = st.sidebar.file_uploader(
 )
 
 TARGET_METRO = st.sidebar.text_input("Enter Target Metro (example: Tampa)", "Tampa")
-
 run_button = st.sidebar.button("✅ Run Weekly Model")
 
+
+# ----------------------------
+# FRED Loader (Safe + Cloud Friendly)
+# ----------------------------
+def load_fred_series(series_id):
+    url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
+
+    r = requests.get(url, timeout=30)
+
+    if r.status_code != 200:
+        raise Exception(f"FRED request failed for {series_id}. Status code: {r.status_code}")
+
+    # FRED can sometimes return HTML instead of CSV (blocked / error page)
+    first_line = r.text.splitlines()[0] if len(r.text.splitlines()) > 0 else ""
+    if "DATE" not in first_line:
+        raise Exception(
+            f"FRED did not return CSV for {series_id}. "
+            f"Unexpected response (maybe blocked by server)."
+        )
+
+    df = pd.read_csv(StringIO(r.text))
+
+    df.columns = [c.strip() for c in df.columns]
+
+    if "DATE" not in df.columns:
+        raise Exception(f"Missing DATE column in FRED response for {series_id}")
+
+    df["DATE"] = pd.to_datetime(df["DATE"])
+    df.set_index("DATE", inplace=True)
+
+    # Replace missing values
+    df.replace(".", np.nan, inplace=True)
+    df = df.astype(float)
+
+    return df
+
+
+# ----------------------------
+# MAIN RUN
+# ----------------------------
 if run_button:
     if not price_file or not value_file:
         st.error("❌ Please upload BOTH Zillow CSV files first.")
@@ -39,13 +86,13 @@ if run_button:
     st.success("✅ Files uploaded successfully!")
 
     # ----------------------------
-    # Load Zillow METRO files
+    # Load Zillow Files
     # ----------------------------
     zillow_price = pd.read_csv(price_file)
     zillow_value = pd.read_csv(value_file)
 
     # ----------------------------
-    # Auto-detect selected metro
+    # Auto detect metro
     # ----------------------------
     price_matches = zillow_price[
         zillow_price["RegionName"].str.contains(TARGET_METRO, case=False, na=False)
@@ -60,51 +107,37 @@ if run_button:
         st.stop()
 
     if len(price_matches) > 1:
-        st.warning("Multiple matches found. Please refine TARGET_METRO.")
+        st.warning("⚠️ Multiple matches found. Please refine TARGET_METRO.")
         st.write(price_matches["RegionName"].values)
         st.stop()
 
     metro_name = price_matches["RegionName"].values[0]
-    st.info(f"✅ Using Zillow metro: **{metro_name}**")
+    st.info(f"✅ Using Zillow metro: {metro_name}")
 
+    # Zillow data starts from column 5 onward
     price = pd.DataFrame(price_matches.iloc[0, 5:])
     value = pd.DataFrame(value_matches.iloc[0, 5:])
 
     # ----------------------------
- # ----------------------------
-# Load FRED data (NO pandas_datareader)
-# ----------------------------
-def load_fred_series(series_id):
-    url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
-    df = pd.read_csv(url)
-    df["DATE"] = pd.to_datetime(df["DATE"])
-    df.set_index("DATE", inplace=True)
-    df.replace(".", np.nan, inplace=True)
-    df = df.astype(float)
-    return df
+    # Load FRED Data
+    # ----------------------------
+    try:
+        interest = load_fred_series("MORTGAGE30US")
+        vacancy = load_fred_series("RRVRUSQ156N")
+        cpi = load_fred_series("CPIAUCSL")
 
-try:
-    interest = load_fred_series("MORTGAGE30US")
-    vacancy = load_fred_series("RRVRUSQ156N")
-    cpi = load_fred_series("CPIAUCSL")
+        fed_data = pd.concat([interest, vacancy, cpi], axis=1)
+        fed_data.columns = ["interest", "vacancy", "cpi"]
+        fed_data = fed_data.sort_index().ffill().dropna()
+        fed_data.index = fed_data.index + timedelta(days=2)
 
-    fed_data = pd.concat([interest, vacancy, cpi], axis=1)
-    fed_data.columns = ["interest", "vacancy", "cpi"]
-    fed_data = fed_data.sort_index().ffill().dropna()
-    fed_data.index = fed_data.index + timedelta(days=2)
-
-except Exception as e:
-    st.error("❌ Failed to fetch FRED data from St. Louis Fed.")
-    st.write(e)
-    st.stop()
-
-
-    fed_data.columns = ["interest", "vacancy", "cpi"]
-    fed_data = fed_data.sort_index().ffill().dropna()
-    fed_data.index = fed_data.index + timedelta(days=2)
+    except Exception as e:
+        st.error("❌ Failed to fetch FRED data from St. Louis Fed.")
+        st.write("Error details:", str(e))
+        st.stop()
 
     # ----------------------------
-    # Prepare price & value
+    # Prepare Zillow price & value
     # ----------------------------
     price.index = pd.to_datetime(price.index)
     value.index = pd.to_datetime(value.index)
@@ -137,7 +170,7 @@ except Exception as e:
     price_data.dropna(inplace=True)
 
     # ----------------------------
-    # Walk-forward model
+    # Walk-forward ML model
     # ----------------------------
     predictors = [
         "adj_price",
@@ -160,7 +193,9 @@ except Exception as e:
 
     for i in range(START, price_data.shape[0], STEP):
         train = price_data.iloc[:i]
-        test = price_data.iloc[i:i+STEP]
+        test = price_data.iloc[i:i + STEP]
+        if len(test) == 0:
+            continue
         all_probs.append(predict_proba(train, test))
 
     probs = np.concatenate(all_probs)
@@ -196,7 +231,7 @@ except Exception as e:
     )
 
     # ----------------------------
-    # Output
+    # OUTPUT TABLES
     # ----------------------------
     st.subheader("✅ Latest Weekly Signal")
     st.dataframe(prob_data[["prob_up", "regime"]].tail(1))
@@ -205,12 +240,19 @@ except Exception as e:
     st.dataframe(monthly_signal.tail(1))
 
     # ----------------------------
-    # Chart 1: Price Trend + Regime
+    # CHART 1: Price Trend + Regime
     # ----------------------------
     st.subheader("📈 Price Trend + Risk Regimes")
 
     fig1 = plt.figure(figsize=(14, 6))
-    plt.plot(prob_data.index, prob_data["adj_price"], color="black", linewidth=2)
+
+    plt.plot(
+        prob_data.index,
+        prob_data["adj_price"],
+        color="black",
+        linewidth=2,
+        label="Real Home Price (Inflation-Adjusted)"
+    )
 
     for i in range(len(prob_data) - 1):
         regime = prob_data["regime"].iloc[i]
@@ -221,9 +263,19 @@ except Exception as e:
         else:
             color = "red"
 
-        plt.axvspan(prob_data.index[i], prob_data.index[i+1], color=color, alpha=0.12)
+        plt.axvspan(
+            prob_data.index[i],
+            prob_data.index[i + 1],
+            color=color,
+            alpha=0.12
+        )
 
-    plt.title(f"{metro_name} Housing Market: Price Trend & Risk Signals", fontsize=14, weight="bold")
+    plt.title(
+        f"{metro_name} Housing Market: Price Trend & Risk Signals",
+        fontsize=14,
+        weight="bold"
+    )
+
     plt.ylabel("Typical Home Price (Inflation-Adjusted)")
     plt.xlabel("Date")
 
@@ -233,20 +285,32 @@ except Exception as e:
         Patch(facecolor="red", alpha=0.25, label="High Risk / Caution"),
     ]
 
-    plt.legend(handles=[plt.Line2D([0], [0], color="black", lw=2, label="Real Home Price")] + legend_elements)
+    plt.legend(
+        handles=[plt.Line2D([0], [0], color="black", lw=2,
+                            label="Real Home Price")] + legend_elements,
+        loc="upper left"
+    )
 
     plt.tight_layout()
     st.pyplot(fig1)
 
     # ----------------------------
-    # Chart 2: Last 12 Weeks Signal
+    # CHART 2: Weekly Signal (Last 12 Weeks)
     # ----------------------------
     st.subheader("📊 Weekly Housing Market Outlook (Last 12 Weeks)")
 
     recent = prob_data.tail(12)
+
     fig2, ax = plt.subplots(figsize=(12, 6))
 
-    ax.plot(recent.index, recent["prob_up"], marker="o", linewidth=2.5, color="black")
+    ax.plot(
+        recent.index,
+        recent["prob_up"],
+        marker="o",
+        linewidth=2.5,
+        color="black"
+    )
+
     ax.axhline(0.65, color="green", linestyle="--", alpha=0.6)
     ax.axhline(0.45, color="red", linestyle="--", alpha=0.6)
 
@@ -258,15 +322,21 @@ except Exception as e:
 
     st.pyplot(fig2)
 
-    # Investor message
-    latest = prob_data.tail(1)
-    regime_now = latest["regime"].values[0]
-
+    # ----------------------------
+    # Plain English Message
+    # ----------------------------
     st.subheader("📌 Plain-English Investor Message")
 
+    latest = prob_data.tail(1)
+    regime_now = latest["regime"].values[0]
+    prob_now = latest["prob_up"].values[0]
+
     if regime_now == "Bull":
-        st.success("🟢 FAVORABLE HOUSING ENVIRONMENT — supportive conditions expected over the next quarter.")
+        st.success(f"🟢 FAVORABLE HOUSING ENVIRONMENT (prob_up={prob_now:.2f})")
+        st.write("The model expects supportive conditions for housing prices over the next quarter.")
     elif regime_now == "Neutral":
-        st.warning("🟡 MIXED HOUSING ENVIRONMENT — unclear outlook over the next quarter.")
+        st.warning(f"🟡 MIXED HOUSING ENVIRONMENT (prob_up={prob_now:.2f})")
+        st.write("The model sees an unclear outlook for housing prices over the next quarter.")
     else:
-        st.error("🔴 RISK ENVIRONMENT — downside pressure expected, caution is warranted.")
+        st.error(f"🔴 RISK ENVIRONMENT (prob_up={prob_now:.2f})")
+        st.write("The model expects downside pressure in housing prices over the next quarter.")
