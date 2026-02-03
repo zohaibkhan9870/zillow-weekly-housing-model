@@ -17,7 +17,7 @@ from matplotlib.patches import Patch
 st.set_page_config(page_title="Zillow Housing Forecast (Multi-Horizon)", layout="wide")
 
 st.title("🏡 Zillow Housing Forecast (Metro-Based)")
-st.write("Upload Zillow files → select metro from dropdown → run forecast for multiple time horizons.")
+st.write("Upload Zillow files → choose State → choose Metro → run forecast for multiple horizons.")
 
 
 # ----------------------------
@@ -97,9 +97,10 @@ def regime_from_prob(p):
 
 
 # ----------------------------
-# ✅ STEP 1: If files uploaded → show dropdown FIRST
+# ✅ STEP 1: If files uploaded → show dropdowns FIRST
 # ----------------------------
 selected_metro = None
+selected_state = None
 
 if price_file and value_file:
     zillow_price = pd.read_csv(price_file)
@@ -119,8 +120,18 @@ if price_file and value_file:
         st.error("❌ Could not find matching metros between both files.")
         st.stop()
 
-    st.sidebar.header("🏙️ Select Metro")
-    selected_metro = st.sidebar.selectbox("Choose Metro", metro_list)
+    # ----------------------------
+    # ✅ State + Metro Dropdowns
+    # ----------------------------
+    st.sidebar.header("🌎 Select Location")
+
+    states = sorted(list(set([m.split(",")[-1].strip() for m in metro_list if "," in m])))
+
+    selected_state = st.sidebar.selectbox("Choose State", states)
+
+    filtered_metros = [m for m in metro_list if m.endswith(f", {selected_state}")]
+
+    selected_metro = st.sidebar.selectbox("Choose Metro", filtered_metros)
 
     st.sidebar.markdown("---")
     run_button = st.sidebar.button("✅ Run Forecast")
