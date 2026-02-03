@@ -237,7 +237,7 @@ if run_button:
     # ----------------------------
     # CHART 1: Price Trend + Regime
     # ----------------------------
-    st.subheader("📈 Price Trend + Risk Regimes")
+    st.subheader("📈 Price Trend + Risk Background")
 
     fig1 = plt.figure(figsize=(14, 6))
 
@@ -266,23 +266,22 @@ if run_button:
         )
 
     plt.title(
-        f"{metro_name} Housing Market: Price Trend & Risk Signals",
+        f"{metro_name} Housing Market: Price Trend & Risk Zones",
         fontsize=14,
         weight="bold"
     )
 
-    plt.ylabel("Typical Home Price (Inflation-Adjusted)")
+    plt.ylabel("Home Price (Inflation-Adjusted)")
     plt.xlabel("Date")
 
     legend_elements = [
-        Patch(facecolor="green", alpha=0.25, label="Supportive Market (Favorable)"),
-        Patch(facecolor="gold", alpha=0.25, label="Mixed Signals (Neutral)"),
-        Patch(facecolor="red", alpha=0.25, label="High Risk / Caution"),
+        Patch(facecolor="green", alpha=0.25, label="Supportive"),
+        Patch(facecolor="gold", alpha=0.25, label="Unclear"),
+        Patch(facecolor="red", alpha=0.25, label="Risky"),
     ]
 
     plt.legend(
-        handles=[plt.Line2D([0], [0], color="black", lw=2,
-                            label="Real Home Price")] + legend_elements,
+        handles=[plt.Line2D([0], [0], color="black", lw=2, label="Real Price")] + legend_elements,
         loc="upper left"
     )
 
@@ -292,7 +291,7 @@ if run_button:
     # ----------------------------
     # CHART 2: Weekly Signal (Last 12 Weeks)
     # ----------------------------
-    st.subheader("📊 Weekly Housing Market Outlook (Last 12 Weeks)")
+    st.subheader("📊 Weekly Outlook (Last 12 Weeks)")
 
     recent = prob_data.tail(12)
 
@@ -309,8 +308,8 @@ if run_button:
     ax.axhline(0.65, color="green", linestyle="--", alpha=0.6)
     ax.axhline(0.45, color="red", linestyle="--", alpha=0.6)
 
-    ax.set_title("Weekly Housing Market Outlook (Last 12 Weeks)", fontsize=14, weight="bold")
-    ax.set_ylabel("Market Outlook Confidence")
+    ax.set_title("Weekly Housing Outlook (Last 12 Weeks)", fontsize=14, weight="bold")
+    ax.set_ylabel("Outlook Score (0 to 1)")
     ax.set_xlabel("Week")
     ax.set_ylim(0, 1)
     ax.grid(alpha=0.3)
@@ -318,47 +317,42 @@ if run_button:
     st.pyplot(fig2)
 
     # ============================================================
-    # ✅ Plain-English Investor Message (LIKE YOUR COLAB VERSION)
+    # ✅ SIMPLE USER FRIENDLY INVESTOR MESSAGE (Option A)
     # ============================================================
-    st.subheader("📌 Plain-English Investor Message")
+    st.subheader("📌 Simple Investor Message")
 
     latest_week = prob_data.tail(1)
     latest_month = monthly_signal.tail(1)
 
-    regime = latest_week["regime"].values[0]
-    prob = latest_week["prob_up"].values[0]
-    month_regime = latest_month["regime"].values[0]
+    weekly_regime = latest_week["regime"].values[0]
+    prob_now = latest_week["prob_up"].values[0]
+    monthly_regime = latest_month["regime"].values[0]
 
-    # ---- Box 1 (same style as Colab)
-    st.text("\n" + "=" * 50)
-
-    if regime == "Bull":
-        st.text("🟢 FAVORABLE HOUSING ENVIRONMENT")
-        st.text("The model expects supportive conditions for housing prices over the next quarter.")
-    elif regime == "Neutral":
-        st.text("🟡 MIXED HOUSING ENVIRONMENT")
-        st.text("The model sees an unclear outlook for housing prices over the next quarter.")
+    # --- WEEKLY Outlook Box (Main)
+    if weekly_regime == "Bull":
+        st.success("✅ This Week’s Outlook: 🟢 Good time (Supportive Market)")
+        st.write("The market looks strong. Home prices are more likely to move up.")
+        action = "Buying/investing looks safer than usual."
+    elif weekly_regime == "Neutral":
+        st.warning("✅ This Week’s Outlook: 🟡 Unclear (Wait & Watch)")
+        st.write("The market has mixed signs. Prices could go up or down.")
+        action = "Best move is to wait and monitor."
     else:
-        st.text("🔴 RISK ENVIRONMENT")
-        st.text("The model expects downside pressure in housing prices over the next quarter.")
+        st.error("✅ This Week’s Outlook: 🔴 High Risk (Be Careful)")
+        st.write("The market looks risky. Prices may face downward pressure.")
+        action = "Be careful and avoid risky decisions."
 
-    st.text("=" * 50 + "\n")
-
-    # ---- Box 2 (Decision Dashboard)
-    st.text("\n" + "=" * 60)
-
-    if regime == "Bull":
-        st.text("🟢 BULL ENVIRONMENT")
-        st.text("Housing conditions are supportive. Upside risk dominates over the next quarter.")
-    elif regime == "Neutral":
-        st.text("🟡 NEUTRAL ENVIRONMENT")
-        st.text("Housing conditions are mixed. No strong directional edge right now.")
+    # --- Monthly Trend Box (Supporting)
+    if monthly_regime == "Bull":
+        st.info("📌 Bigger Trend (Monthly): 🟢 Growing Trend")
+    elif monthly_regime == "Neutral":
+        st.info("📌 Bigger Trend (Monthly): 🟡 Mixed / Sideways Trend")
     else:
-        st.text("🔴 RISK ENVIRONMENT")
-        st.text("Downside risk is elevated. Caution is warranted for housing exposure.")
+        st.info("📌 Bigger Trend (Monthly): 🔴 Weak Trend")
 
-    st.text("\nContext:")
-    st.text(f"• Weekly signal: {regime}")
-    st.text(f"• Monthly trend: {month_regime}")
+    # --- Suggested Action
+    st.markdown("### 👉 Suggested Action")
+    st.write(action)
 
-    st.text("=" * 60 + "\n")
+    # --- Small Extra Info (optional)
+    st.caption(f"Extra info: Weekly score = {prob_now:.2f} (higher means more supportive).")
