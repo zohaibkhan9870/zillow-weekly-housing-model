@@ -198,13 +198,17 @@ else:
 
 
 # ----------------------------
-# ✅ FRED API Loader
+# ✅ FRED API Loader (ONLY 3 SERIES)
 # ----------------------------
 def load_fred_series(series_id):
     api_key = st.secrets["FRED_API_KEY"]
 
     url = "https://api.stlouisfed.org/fred/series/observations"
-    params = {"series_id": series_id, "api_key": api_key, "file_type": "json"}
+    params = {
+        "series_id": series_id,
+        "api_key": api_key,
+        "file_type": "json"
+    }
 
     r = requests.get(url, params=params, timeout=30)
     if r.status_code != 200:
@@ -293,7 +297,7 @@ run_button = st.button("✅ Run Forecast")
 
 
 # ----------------------------
-# ✅ Run Model + Results + Charts
+# ✅ Run Model + Results + Charts (ONLY 3 FRED SERIES)
 # ----------------------------
 if run_button:
     with st.spinner(f"⏳ Processing... Running forecast for {selected_metro}"):
@@ -312,16 +316,12 @@ if run_button:
         status.info("Step 2/5: Fetching macro data from FRED...")
         progress.progress(30)
 
+        # ✅ ONLY 3 FRED SERIES
         interest = load_fred_series("MORTGAGE30US").rename(columns={"value": "interest"})
-        vacancy = load_fred_series("RRVRUSQ156N").rename(columns={"value": "vacancy"})
         cpi = load_fred_series("CPIAUCSL").rename(columns={"value": "cpi"})
+        vacancy = load_fred_series("RRVRUSQ156N").rename(columns={"value": "vacancy"})
 
-        unemployment = load_fred_series("UNRATE").rename(columns={"value": "unemployment"})
-        jobs = load_fred_series("PAYEMS").rename(columns={"value": "jobs"})
-        permits = load_fred_series("PERMIT").rename(columns={"value": "permits"})
-        stress = load_fred_series("STLFSI4").rename(columns={"value": "stress"})
-
-        fed_data = pd.concat([interest, vacancy, cpi, unemployment, jobs, permits, stress], axis=1)
+        fed_data = pd.concat([interest, cpi, vacancy], axis=1)
         fed_data = fed_data.sort_index().ffill().dropna()
         fed_data.index = fed_data.index + timedelta(days=2)
 
@@ -350,19 +350,16 @@ if run_button:
         data["price_13w_change"] = data["adj_price"].pct_change(13)
         data["value_52w_change"] = data["adj_value"].pct_change(52)
 
-        data["unemployment_13w_change"] = data["unemployment"].pct_change(13)
-        data["jobs_13w_change"] = data["jobs"].pct_change(13)
-        data["permits_13w_change"] = data["permits"].pct_change(13)
-        data["stress_13w_change"] = data["stress"].pct_change(13)
-
         data.dropna(inplace=True)
 
+        # ✅ predictors reduced to ONLY 3-FRED features
         predictors = [
-            "adj_price", "adj_value", "interest", "vacancy",
-            "price_13w_change", "value_52w_change",
-            "unemployment", "jobs", "permits", "stress",
-            "unemployment_13w_change", "jobs_13w_change",
-            "permits_13w_change", "stress_13w_change"
+            "adj_price",
+            "adj_value",
+            "interest",
+            "vacancy",
+            "price_13w_change",
+            "value_52w_change"
         ]
 
         START = 104
@@ -475,6 +472,7 @@ if run_button:
         mime="text/csv"
     )
 
+    # Weekly message
     st.subheader("📌 Weekly Prediction")
     latest_week_prob = float(prob_data["prob_up"].tail(1).values[0])
     weekly_label = friendly_label(latest_week_prob)
@@ -490,6 +488,7 @@ if run_button:
         st.warning(f"✅ Weekly Outlook: {weekly_label}")
         st.write("This week is unclear. Prices could move up or down.")
 
+    # Monthly message
     st.subheader("📌 Monthly Prediction")
     latest_month_regime = monthly_signal["regime"].tail(1).values[0]
 
@@ -503,11 +502,14 @@ if run_button:
         st.info("ℹ️ Monthly Trend: 🟡 Still unclear")
         st.write("The bigger monthly trend is still unclear.")
 
+    # Suggested Action
     st.subheader("👉 Suggested Action")
     st.write(weekly_action)
 
+    # Chart 1
     st.subheader("📈 Price Trend + Risk Background (3-Month Outlook)")
     fig1 = plt.figure(figsize=(14, 6))
+
     plt.plot(prob_data.index, prob_data["adj_price"], color="black", linewidth=2)
 
     for i in range(len(prob_data) - 1):
@@ -534,6 +536,7 @@ if run_button:
     plt.tight_layout()
     st.pyplot(fig1)
 
+    # Chart 2
     st.subheader("📊 Weekly Outlook (Last 12 Weeks)")
     recent = prob_data.tail(12)
 
