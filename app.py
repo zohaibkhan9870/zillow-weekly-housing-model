@@ -243,40 +243,6 @@ def friendly_label(prob_up):
         return "🟡 Unclear"
 
 
-def simple_action(label):
-    if "🟢" in label:
-        return "Buying/investing looks safer than usual."
-    elif "🔴" in label:
-        return "Be careful — risk is high."
-    else:
-        return "Wait and monitor the market."
-
-
-# ✅ NEW: role-based suggested action (Upgrade #9)
-def role_based_action(label, user_role):
-    if user_role == "🏠 Home Buyer":
-        if "🟢" in label:
-            return "Buyer Mode: This is a relatively safer time to buy. Focus on negotiating and locking rate options."
-        elif "🔴" in label:
-            return "Buyer Mode: Risk is high. Prefer waiting or buying only if the deal is deeply discounted."
-        else:
-            return "Buyer Mode: Unclear market. Monitor listings, price cuts, and interest rates closely."
-    elif user_role == "💼 Investor":
-        if "🟢" in label:
-            return "Investor Mode: Market looks supportive. Consider entry strategies and value-add opportunities."
-        elif "🔴" in label:
-            return "Investor Mode: High downside risk. Prefer cashflow deals, low leverage, or wait for better entry."
-        else:
-            return "Investor Mode: Mixed signals. Stay selective and demand strong fundamentals."
-    else:  # Agent
-        if "🟢" in label:
-            return "Agent Mode: Market is supportive. Expect more buyer activity and stronger pricing."
-        elif "🔴" in label:
-            return "Agent Mode: Risky conditions. Expect slower sales and more price reductions."
-        else:
-            return "Agent Mode: Mixed conditions. Manage client expectations and track inventory weekly."
-
-
 def regime_from_prob(p):
     if p >= 0.65:
         return "Bull"
@@ -284,6 +250,31 @@ def regime_from_prob(p):
         return "Risk"
     else:
         return "Neutral"
+
+
+# ✅ Upgrade #9: Role-based actions
+def role_based_action(label, user_role):
+    if user_role == "🏠 Home Buyer":
+        if "🟢" in label:
+            return "Buyer Mode: Safer time to buy. Negotiate and consider locking rate options."
+        elif "🔴" in label:
+            return "Buyer Mode: Risk is high. Prefer waiting or buying only if strongly discounted."
+        else:
+            return "Buyer Mode: Unclear market. Monitor price cuts and interest rates."
+    elif user_role == "💼 Investor":
+        if "🟢" in label:
+            return "Investor Mode: Supportive market. Consider entry strategies and value-add deals."
+        elif "🔴" in label:
+            return "Investor Mode: High downside risk. Prefer low leverage and strong cashflow."
+        else:
+            return "Investor Mode: Mixed signals. Stay selective and demand strong fundamentals."
+    else:  # Agent
+        if "🟢" in label:
+            return "Agent Mode: Supportive market. Expect stronger buyer activity."
+        elif "🔴" in label:
+            return "Agent Mode: Risky conditions. Expect slower sales and more reductions."
+        else:
+            return "Agent Mode: Mixed conditions. Track inventory and guide clients carefully."
 
 
 # ✅ Deal Score (0–100)
@@ -318,7 +309,6 @@ def compute_backtest_metrics(temp_df, predictors, start_idx, step, threshold=0.5
         test = temp_df.iloc[i:i + step]
         if len(test) == 0:
             continue
-
         probs = predict_proba(train, test)
         all_probs.append(probs)
         all_true.append(test["target"].values)
@@ -334,7 +324,7 @@ def compute_backtest_metrics(temp_df, predictors, start_idx, step, threshold=0.5
     return {"accuracy": accuracy, "win_rate": accuracy, "n_samples": int(len(y_true))}
 
 
-# ✅ Generate PDF report bytes
+# ✅ PDF report generator
 def generate_pdf_report(metro, out_df, weekly_label, monthly_regime, suggested_action, deal_score_value):
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=letter)
@@ -383,19 +373,20 @@ def generate_pdf_report(metro, out_df, weekly_label, monthly_regime, suggested_a
     return buffer.read()
 
 
-# ✅ NEW: Feature importance helper (Upgrade #8)
-def get_feature_importance_chart(trained_model, feature_names, title="Feature Importance"):
-    importances = trained_model.feature_importances_
-    fi = pd.DataFrame({"feature": feature_names, "importance": importances}).sort_values("importance", ascending=False)
+# ✅ Upgrade #8: Feature Importance Plot (no seaborn)
+def feature_importance_fig(model, feature_names, title="Feature Importance"):
+    importances = model.feature_importances_
+    fi_df = pd.DataFrame({"Feature": feature_names, "Importance": importances})
+    fi_df = fi_df.sort_values("Importance", ascending=False)
 
     fig, ax = plt.subplots(figsize=(10, 5))
-    ax.bar(fi["feature"], fi["importance"])
+    ax.bar(fi_df["Feature"], fi_df["Importance"])
     ax.set_title(title, fontsize=13, weight="bold")
     ax.set_ylabel("Importance")
     ax.set_xlabel("Feature")
     ax.tick_params(axis="x", rotation=45)
     plt.tight_layout()
-    return fi, fig
+    return fi_df, fig
 
 
 # ----------------------------
@@ -435,24 +426,39 @@ if len(filtered_metros) == 0:
 default_metro_index = filtered_metros.index(auto_metro) if auto_metro in filtered_metros else 0
 selected_metro = st.selectbox("Choose Metro", filtered_metros, index=default_metro_index)
 
-
-# ✅ NEW: User role selector (Upgrade #9)
+# ✅ Upgrade #9: Client mode
 st.markdown("### 👤 Client Mode")
 user_role = st.selectbox("Choose client type", ["🏠 Home Buyer", "💼 Investor", "🧑‍💼 Agent"], index=0)
 
-# ✅ NEW: Advanced UI toggle (Upgrade #10)
+# ✅ Upgrade #10: Advanced toggle
 show_advanced = st.checkbox("⚙️ Show Advanced Analytics", value=True)
 
 # ✅ Metro Comparison
 st.markdown("### 🏙️ Quick Compare (Top 3 Metros in Same State)")
 compare_enabled = st.checkbox("✅ Enable Metro Comparison", value=True)
 
-# ✅ NEW: Full Metro Ranking (Upgrade #6)
+# ✅ Upgrade #6: Full Metro Ranking ✅ FIXED (no crash)
 st.markdown("### 🏆 Metro Ranking (Selected State)")
 rank_enabled = st.checkbox("✅ Enable Full Metro Ranking", value=True)
-rank_count = st.slider("How many metros to rank?", min_value=3, max_value=min(25, len(filtered_metros)), value=min(10, len(filtered_metros)))
 
-# ✅ NEW: Alerts System (Upgrade #7)
+total_metros = len(filtered_metros)
+
+if total_metros < 3:
+    st.warning("⚠️ Not enough metros in this state/search filter to run ranking (need at least 3).")
+    rank_count = total_metros
+    rank_enabled = False
+else:
+    max_rank = min(25, total_metros)
+    default_rank = min(10, max_rank)
+
+    rank_count = st.slider(
+        "How many metros to rank?",
+        min_value=3,
+        max_value=max_rank,
+        value=default_rank
+    )
+
+# ✅ Upgrade #7: Alerts
 st.markdown("### 🔔 Alerts (Basic Version)")
 alerts_enabled = st.checkbox("✅ Enable Alerts", value=True)
 alert_threshold = st.slider("Alert Threshold (Up Chance)", 0.50, 0.80, 0.65, 0.01)
@@ -542,7 +548,7 @@ if run_button:
         backtest = compute_backtest_metrics(temp_bt, predictors, START, STEP, threshold=0.5)
 
         results = []
-        stored_models = {}  # store trained model for explainability (Upgrade #8)
+        stored_models = {}
 
         for horizon_name, weeks_ahead in horizons.items():
             temp = data.copy()
@@ -557,10 +563,10 @@ if run_button:
             def predict_proba(train, test, return_model=False):
                 rf = RandomForestClassifier(min_samples_split=10, random_state=1)
                 rf.fit(train[predictors], train["target"])
-                proba = rf.predict_proba(test[predictors])[:, 1]
+                p = rf.predict_proba(test[predictors])[:, 1]
                 if return_model:
-                    return proba, rf
-                return proba
+                    return p, rf
+                return p
 
             all_probs = []
             last_model = None
@@ -578,7 +584,6 @@ if run_button:
             pred_df["prob_up"] = probs
             latest_prob = float(pred_df["prob_up"].tail(1).values[0])
 
-            # store last trained model for explainability
             stored_models[horizon_name] = last_model
 
             up_pct = round(latest_prob * 100, 0)
@@ -642,16 +647,13 @@ if run_button:
         status.success("✅ Done! Forecast is ready.")
         progress.progress(100)
 
-    # ----------------------------
-    # ✅ UI Upgrade (#10): KPI SUMMARY SECTION
-    # ----------------------------
+    # KPI Summary
     st.markdown("---")
     st.subheader("📌 Quick Summary (Client Value KPIs)")
 
     latest_week_prob = float(prob_data["prob_up"].tail(1).values[0])
     weekly_label = friendly_label(latest_week_prob)
     weekly_action = role_based_action(weekly_label, user_role)
-
     deal_score_value = deal_score(latest_week_prob)
 
     col1, col2, col3, col4, col5 = st.columns(5)
@@ -664,12 +666,7 @@ if run_button:
     else:
         col5.metric("Backtest Win Rate (3M)", "N/A")
 
-    if backtest is not None:
-        st.caption(f"Backtest samples used: {backtest['n_samples']} (walk-forward out-of-sample).")
-
-    # ----------------------------
-    # ✅ Alerts (#7)
-    # ----------------------------
+    # Alerts
     if alerts_enabled:
         st.markdown("---")
         st.subheader("🔔 Alert Status")
@@ -678,132 +675,25 @@ if run_button:
         else:
             st.info(f"ℹ️ No alert: Weekly score {latest_week_prob:.2f} < threshold {alert_threshold:.2f}")
 
-    # ----------------------------
-    # ✅ Full Metro Ranking (#6)
-    # ----------------------------
-    if rank_enabled:
-        st.markdown("---")
-        st.subheader(f"🏆 Metro Ranking — Top {rank_count} (State: {selected_state})")
-
-        ranking_rows = []
-        for m in filtered_metros[:rank_count * 2]:  # small buffer for data issues
-            pm = zillow_price[zillow_price["RegionName"] == m]
-            vm = zillow_value[zillow_value["RegionName"] == m]
-            if len(pm) == 0 or len(vm) == 0:
-                continue
-
-            p = pd.DataFrame(pm.iloc[0, 5:])
-            v = pd.DataFrame(vm.iloc[0, 5:])
-
-            p.index = pd.to_datetime(p.index)
-            v.index = pd.to_datetime(v.index)
-            p["month"] = p.index.to_period("M")
-            v["month"] = v.index.to_period("M")
-
-            pv = p.merge(v, on="month")
-            pv.index = p.index
-            pv.drop(columns=["month"], inplace=True)
-            pv.columns = ["price", "value"]
-
-            d2 = fed_data.merge(pv, left_index=True, right_index=True)
-            d2["adj_price"] = d2["price"] / d2["cpi"] * 100
-            d2["adj_value"] = d2["value"] / d2["cpi"] * 100
-            d2["price_13w_change"] = d2["adj_price"].pct_change(13)
-            d2["value_52w_change"] = d2["adj_value"].pct_change(52)
-            d2.dropna(inplace=True)
-
-            if d2.shape[0] <= START:
-                continue
-
-            # quick estimate from last momentum (fast heuristic)
-            last_change = float(d2["price_13w_change"].tail(1).values[0])
-            proxy_prob = 0.50 + np.clip(last_change, -0.10, 0.10) * 2.0  # clamp change
-            proxy_prob = float(np.clip(proxy_prob, 0.05, 0.95))
-
-            ranking_rows.append([
-                m,
-                f"{proxy_prob*100:.0f}%",
-                friendly_label(proxy_prob),
-                deal_score(proxy_prob)
-            ])
-
-        if len(ranking_rows) > 0:
-            ranking_df = pd.DataFrame(ranking_rows, columns=["Metro", "Proxy Up Chance (Fast)", "Outlook", "Deal Score"])
-            ranking_df = ranking_df.sort_values("Deal Score", ascending=False).head(rank_count)
-            st.dataframe(ranking_df, use_container_width=True)
-        else:
-            st.info("Not enough ranking data for this state.")
-
-    # ----------------------------
-    # ✅ Metro Comparison (Top 3) (kept)
-    # ----------------------------
-    if compare_enabled:
-        st.markdown("---")
-        st.subheader("🏙️ Metro Comparison (Same State) — Top 3 by Deal Score")
-
-        sample_metros = filtered_metros[:8]
-        comp_rows = []
-
-        for m in sample_metros:
-            # fast score from name list
-            pm = zillow_price[zillow_price["RegionName"] == m]
-            if len(pm) == 0:
-                continue
-
-            p = pd.DataFrame(pm.iloc[0, 5:])
-            p.index = pd.to_datetime(p.index)
-            if len(p) < 30:
-                continue
-
-            # quick proxy
-            pct = p.iloc[:, 0].pct_change(13).dropna()
-            if pct.empty:
-                continue
-            proxy = 0.50 + np.clip(float(pct.tail(1).values[0]), -0.10, 0.10) * 2.0
-            proxy = float(np.clip(proxy, 0.05, 0.95))
-
-            comp_rows.append([m, f"{proxy*100:.0f}%", friendly_label(proxy), deal_score(proxy)])
-
-        if len(comp_rows) > 0:
-            comp_df = pd.DataFrame(comp_rows, columns=["Metro", "Up Chance (Fast)", "Outlook", "Deal Score"])
-            comp_df = comp_df.sort_values("Deal Score", ascending=False).head(3)
-            st.dataframe(comp_df, use_container_width=True)
-        else:
-            st.info("Comparison needs more data. Try another state or metro.")
-
-    # ----------------------------
-    # Explainability (#8)
-    # ----------------------------
+    # Feature importance
     if show_advanced:
         st.markdown("---")
         st.subheader("🧠 Why the Model Thinks This (Feature Importance)")
-
         chosen_horizon = st.selectbox("Choose horizon for explainability", list(horizons.keys()), index=2)
 
         model_for_horizon = stored_models.get(chosen_horizon)
         if model_for_horizon is not None:
-            fi_df, fig_fi = get_feature_importance_chart(model_for_horizon, predictors, title=f"Feature Importance ({chosen_horizon})")
-            st.pyplot(fig_fi)
+            fi_df, fi_fig = feature_importance_fig(model_for_horizon, predictors, title=f"Feature Importance ({chosen_horizon})")
+            st.pyplot(fi_fig)
             st.dataframe(fi_df.head(6), use_container_width=True)
         else:
             st.info("Explainability not available for this horizon.")
 
-    # Existing explanation expander
-    with st.expander("ℹ️ What does this forecast mean? (Simple explanation)"):
-        st.write("✅ **Price Up Chance (%)** = chance home prices may rise.")
-        st.write("✅ **Price Down Chance (%)** = chance home prices may fall.")
-        st.write("✅ **Outlook** shows the simple signal:")
-        st.write("• 🟢 Good time = more chance of prices going up")
-        st.write("• 🟡 Unclear = mixed signals (could go up or down)")
-        st.write("• 🔴 Risky = higher downside risk")
-        st.write("✅ **Expected Change (%)** = estimated direction + strength.")
-        st.write("✅ **Expected Range (%)** = rough risk range around expected change.")
-
-    # Results
+    # Forecast Results Table
     st.subheader("✅ Forecast Results (All Time Horizons)")
     st.dataframe(out_df, use_container_width=True)
 
-    # CSV Download
+    # Downloads
     csv_bytes = out_df.to_csv(index=False).encode("utf-8")
     st.download_button(
         label="⬇️ Download Results CSV",
@@ -812,7 +702,6 @@ if run_button:
         mime="text/csv"
     )
 
-    # PDF Download
     pdf_bytes = generate_pdf_report(
         metro=selected_metro,
         out_df=out_df,
@@ -829,7 +718,7 @@ if run_button:
         mime="application/pdf"
     )
 
-    # Weekly message
+    # Weekly Prediction
     st.subheader("📌 Weekly Prediction")
     if "🟢" in weekly_label:
         st.success(f"✅ Weekly Outlook: {weekly_label}")
@@ -841,7 +730,7 @@ if run_button:
         st.warning(f"✅ Weekly Outlook: {weekly_label}")
         st.write("This week is unclear. Prices could move up or down.")
 
-    # Monthly message
+    # Monthly Prediction
     st.subheader("📌 Monthly Prediction")
     latest_month_regime = monthly_signal["regime"].tail(1).values[0]
 
@@ -866,10 +755,10 @@ if run_button:
     plt.plot(prob_data.index, prob_data["adj_price"], color="black", linewidth=2)
 
     for i in range(len(prob_data) - 1):
-        regime = prob_data["regime"].iloc[i]
-        if regime == "Bull":
+        reg = prob_data["regime"].iloc[i]
+        if reg == "Bull":
             color = "green"
-        elif regime == "Neutral":
+        elif reg == "Neutral":
             color = "gold"
         else:
             color = "red"
