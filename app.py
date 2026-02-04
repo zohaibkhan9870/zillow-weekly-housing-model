@@ -373,7 +373,7 @@ def generate_pdf_report(metro, out_df, weekly_label, monthly_regime, suggested_a
     return buffer.read()
 
 
-# ✅ Upgrade #8: Feature Importance Plot (no seaborn)
+# ✅ Upgrade #8: Feature Importance Plot
 def feature_importance_fig(model, feature_names, title="Feature Importance"):
     importances = model.feature_importances_
     fi_df = pd.DataFrame({"Feature": feature_names, "Importance": importances})
@@ -415,9 +415,13 @@ if metro_search:
 default_state_index = states.index(auto_state) if auto_state in states else 0
 selected_state = st.selectbox("Choose State", states, index=default_state_index)
 
-filtered_metros = [m for m in metro_list if m.endswith(f", {selected_state}")]
+# ✅ FIX: Always keep full state metros for ranking/compare
+state_metros = [m for m in metro_list if m.endswith(f", {selected_state}")]
+
+# ✅ Search affects only dropdown list
+filtered_metros = state_metros
 if metro_search:
-    filtered_metros = [m for m in filtered_metros if metro_search.lower() in m.lower()]
+    filtered_metros = [m for m in state_metros if metro_search.lower() in m.lower()]
 
 if len(filtered_metros) == 0:
     st.warning("⚠️ No metros found. Try another search or change state.")
@@ -426,25 +430,25 @@ if len(filtered_metros) == 0:
 default_metro_index = filtered_metros.index(auto_metro) if auto_metro in filtered_metros else 0
 selected_metro = st.selectbox("Choose Metro", filtered_metros, index=default_metro_index)
 
-# ✅ Upgrade #9: Client mode
+# Client mode
 st.markdown("### 👤 Client Mode")
 user_role = st.selectbox("Choose client type", ["🏠 Home Buyer", "💼 Investor", "🧑‍💼 Agent"], index=0)
 
-# ✅ Upgrade #10: Advanced toggle
+# Advanced toggle
 show_advanced = st.checkbox("⚙️ Show Advanced Analytics", value=True)
 
-# ✅ Metro Comparison
+# Metro Comparison
 st.markdown("### 🏙️ Quick Compare (Top 3 Metros in Same State)")
 compare_enabled = st.checkbox("✅ Enable Metro Comparison", value=True)
 
-# ✅ Upgrade #6: Full Metro Ranking ✅ FIXED (no crash)
+# ✅ Full Metro Ranking (fixed using state_metros)
 st.markdown("### 🏆 Metro Ranking (Selected State)")
 rank_enabled = st.checkbox("✅ Enable Full Metro Ranking", value=True)
 
-total_metros = len(filtered_metros)
+total_metros = len(state_metros)
 
 if total_metros < 3:
-    st.warning("⚠️ Not enough metros in this state/search filter to run ranking (need at least 3).")
+    st.warning("⚠️ Not enough metros in this state to run ranking (need at least 3).")
     rank_count = total_metros
     rank_enabled = False
 else:
@@ -458,7 +462,7 @@ else:
         value=default_rank
     )
 
-# ✅ Upgrade #7: Alerts
+# Alerts
 st.markdown("### 🔔 Alerts (Basic Version)")
 alerts_enabled = st.checkbox("✅ Enable Alerts", value=True)
 alert_threshold = st.slider("Alert Threshold (Up Chance)", 0.50, 0.80, 0.65, 0.01)
@@ -675,6 +679,78 @@ if run_button:
         else:
             st.info(f"ℹ️ No alert: Weekly score {latest_week_prob:.2f} < threshold {alert_threshold:.2f}")
 
+    # ✅ Metro Comparison Results (now always uses state_metros)
+    if compare_enabled:
+        st.markdown("---")
+        st.subheader("🏙️ Metro Comparison (Same State) — Top 3 by Deal Score")
+
+        sample_metros = state_metros[:8]
+        comp_rows = []
+
+        for m in sample_metros:
+            pm = zillow_price[zillow_price["RegionName"] == m]
+            if len(pm) == 0:
+                continue
+
+            p = pd.DataFrame(pm.iloc[0, 5:])
+            p.index = pd.to_datetime(p.index)
+
+            if len(p) < 30:
+                continue
+
+            pct = p.iloc[:, 0].pct_change(13).dropna()
+            if pct.empty:
+                continue
+
+            proxy = 0.50 + np.clip(float(pct.tail(1).values[0]), -0.10, 0.10) * 2.0
+            proxy = float(np.clip(proxy, 0.05, 0.95))
+
+            comp_rows.append([m, f"{proxy*100:.0f}%", friendly_label(proxy), deal_score(proxy)])
+
+        if len(comp_rows) > 0:
+            comp_df = pd.DataFrame(comp_rows, columns=["Metro", "Up Chance (Fast)", "Outlook", "Deal Score"])
+            comp_df = comp_df.sort_values("Deal Score", ascending=False).head(3)
+            st.dataframe(comp_df, use_container_width=True)
+        else:
+            st.info("Comparison needs more data. Try another state or metro.")
+
+    # ✅ Metro Ranking Results (now always uses state_metros)
+    if rank_enabled:
+        st.markdown("---")
+        st.subheader(f"🏆 Metro Ranking — Top {rank_count} (State: {selected_state})")
+
+        ranking_rows = []
+        for m in state_metros[:rank_count * 2]:
+            pm = zillow_price[zillow_price["RegionName"] == m]
+            if len(pm) == 0:
+                continue
+
+            p = pd.DataFrame(pm.iloc[0, 5:])
+            p.index = pd.to_datetime(p.index)
+            if len(p) < 30:
+                continue
+
+            pct = p.iloc[:, 0].pct_change(13).dropna()
+            if pct.empty:
+                continue
+
+            proxy_prob = 0.50 + np.clip(float(pct.tail(1).values[0]), -0.10, 0.10) * 2.0
+            proxy_prob = float(np.clip(proxy_prob, 0.05, 0.95))
+
+            ranking_rows.append([
+                m,
+                f"{proxy_prob*100:.0f}%",
+                friendly_label(proxy_prob),
+                deal_score(proxy_prob)
+            ])
+
+        if len(ranking_rows) > 0:
+            ranking_df = pd.DataFrame(ranking_rows, columns=["Metro", "Proxy Up Chance (Fast)", "Outlook", "Deal Score"])
+            ranking_df = ranking_df.sort_values("Deal Score", ascending=False).head(rank_count)
+            st.dataframe(ranking_df, use_container_width=True)
+        else:
+            st.info("Not enough ranking data for this state.")
+
     # Feature importance
     if show_advanced:
         st.markdown("---")
@@ -743,64 +819,3 @@ if run_button:
     else:
         st.info("ℹ️ Monthly Trend: 🟡 Still unclear")
         st.write("The bigger monthly trend is still unclear.")
-
-    # Suggested Action
-    st.subheader("👉 Suggested Action")
-    st.write(weekly_action)
-
-    # Chart 1
-    st.subheader("📈 Price Trend + Risk Background (3-Month Outlook)")
-    fig1 = plt.figure(figsize=(14, 6))
-
-    plt.plot(prob_data.index, prob_data["adj_price"], color="black", linewidth=2)
-
-    for i in range(len(prob_data) - 1):
-        reg = prob_data["regime"].iloc[i]
-        if reg == "Bull":
-            color = "green"
-        elif reg == "Neutral":
-            color = "gold"
-        else:
-            color = "red"
-        plt.axvspan(prob_data.index[i], prob_data.index[i + 1], color=color, alpha=0.12)
-
-    plt.title(f"{selected_metro} Housing Price Trend (With Risk Zones)", fontsize=14, weight="bold")
-    plt.ylabel("Inflation-Adjusted Price")
-    plt.xlabel("Date")
-
-    legend_elements = [
-        Patch(facecolor="green", alpha=0.25, label="Supportive"),
-        Patch(facecolor="gold", alpha=0.25, label="Unclear"),
-        Patch(facecolor="red", alpha=0.25, label="Risky"),
-    ]
-    plt.legend(handles=legend_elements, loc="upper left")
-
-    plt.tight_layout()
-    st.pyplot(fig1)
-
-    # Chart 2
-    st.subheader("📊 Weekly Outlook (Last 12 Weeks)")
-    recent = prob_data.tail(12)
-
-    fig2, ax = plt.subplots(figsize=(12, 7))
-    ax.plot(recent.index, recent["prob_up"], marker="o", linewidth=2.5, color="black")
-    ax.axhline(0.65, color="green", linestyle="--", alpha=0.6)
-    ax.axhline(0.45, color="red", linestyle="--", alpha=0.6)
-
-    ax.set_title("Weekly Outlook Score (Last 12 Weeks)", fontsize=14, weight="bold")
-    ax.set_ylabel("Outlook Score (0 to 1)")
-    ax.set_xlabel("Week")
-    ax.set_ylim(0, 1)
-    ax.grid(alpha=0.3)
-
-    explanation_text = (
-        "HOW TO READ THIS CHART (Simple)\n"
-        "• Black line with dots: Weekly outlook score (higher = better).\n"
-        "• Green dotted line (0.65): Above = Good time (supportive market).\n"
-        "• Red dotted line (0.45): Below = Risky time (higher downside risk).\n"
-        "• X-axis = Weeks (time) | Y-axis = Score from 0 to 1."
-    )
-
-    fig2.text(0.5, 0.01, explanation_text, ha="center", va="bottom", fontsize=10)
-    plt.tight_layout(rect=[0, 0.12, 1, 1])
-    st.pyplot(fig2)
