@@ -6,3 +6,4 @@ matplotlib
 scikit-learn
 requests
 lxml
+reportlab
