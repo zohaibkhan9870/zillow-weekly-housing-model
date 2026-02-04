@@ -383,6 +383,64 @@ def feature_importance_fig(model, feature_names, title="Feature Importance"):
     return fi_df, fig
 
 
+# ✅ helper for metro scoring
+def calc_metro_latest_prob(metro_name, fed_data, predictors, START, STEP):
+    pm = zillow_price[zillow_price["RegionName"] == metro_name]
+    vm = zillow_value[zillow_value["RegionName"] == metro_name]
+    if len(pm) == 0 or len(vm) == 0:
+        return None
+
+    p = pd.DataFrame(pm.iloc[0, 5:])
+    v = pd.DataFrame(vm.iloc[0, 5:])
+    p.index = pd.to_datetime(p.index)
+    v.index = pd.to_datetime(v.index)
+
+    p["month"] = p.index.to_period("M")
+    v["month"] = v.index.to_period("M")
+
+    pv = p.merge(v, on="month")
+    pv.index = p.index
+    pv.drop(columns=["month"], inplace=True)
+    pv.columns = ["price", "value"]
+
+    d2 = fed_data.merge(pv, left_index=True, right_index=True)
+    d2["adj_price"] = d2["price"] / d2["cpi"] * 100
+    d2["adj_value"] = d2["value"] / d2["cpi"] * 100
+    d2["price_13w_change"] = d2["adj_price"].pct_change(13)
+    d2["value_52w_change"] = d2["adj_value"].pct_change(52)
+    d2.dropna(inplace=True)
+
+    if d2.shape[0] <= START:
+        return None
+
+    t2 = d2.copy()
+    t2["future_price"] = t2["adj_price"].shift(-13)
+    t2["target"] = (t2["future_price"] > t2["adj_price"]).astype(int)
+    t2.dropna(inplace=True)
+
+    if t2.shape[0] <= START:
+        return None
+
+    def predict_proba_comp(train, test):
+        rf = RandomForestClassifier(min_samples_split=10, random_state=1)
+        rf.fit(train[predictors], train["target"])
+        return rf.predict_proba(test[predictors])[:, 1]
+
+    all_probs = []
+    for i in range(START, t2.shape[0], STEP):
+        train = t2.iloc[:i]
+        test = t2.iloc[i:i + STEP]
+        if len(test) == 0:
+            continue
+        all_probs.append(predict_proba_comp(train, test))
+
+    if len(all_probs) == 0:
+        return None
+
+    probs = np.concatenate(all_probs)
+    return float(probs[-1])
+
+
 # ----------------------------
 # ✅ Location selection
 # ----------------------------
@@ -395,7 +453,6 @@ metro_list = sorted(
 )
 
 metro_search = st.text_input("🔍 Search metro (optional)", "").strip()
-
 states = sorted(list(set([m.split(",")[-1].strip() for m in metro_list if "," in m])))
 
 auto_state = None
@@ -409,10 +466,10 @@ if metro_search:
 default_state_index = states.index(auto_state) if auto_state in states else 0
 selected_state = st.selectbox("Choose State", states, index=default_state_index)
 
-# ✅ FIX: Full metros for compare/ranking
+# ✅ Full metros (not affected by search)
 state_metros = [m for m in metro_list if m.endswith(f", {selected_state}")]
 
-# ✅ Search only affects dropdown
+# ✅ Filtered metros only for dropdown
 filtered_metros = state_metros
 if metro_search:
     filtered_metros = [m for m in state_metros if metro_search.lower() in m.lower()]
@@ -436,21 +493,14 @@ st.markdown("### 🏆 Metro Ranking (Selected State)")
 rank_enabled = st.checkbox("✅ Enable Full Metro Ranking", value=True)
 
 total_metros = len(state_metros)
-
 if total_metros < 3:
     st.warning("⚠️ Not enough metros in this state to run ranking (need at least 3).")
-    rank_count = total_metros
     rank_enabled = False
+    rank_count = total_metros
 else:
     max_rank = min(25, total_metros)
     default_rank = min(10, max_rank)
-
-    rank_count = st.slider(
-        "How many metros to rank?",
-        min_value=3,
-        max_value=max_rank,
-        value=default_rank
-    )
+    rank_count = st.slider("How many metros to rank?", min_value=3, max_value=max_rank, value=default_rank)
 
 st.markdown("### 🔔 Alerts (Basic Version)")
 alerts_enabled = st.checkbox("✅ Enable Alerts", value=True)
@@ -537,7 +587,6 @@ if run_button:
         temp_bt["future_price"] = temp_bt["adj_price"].shift(-13)
         temp_bt["target"] = (temp_bt["future_price"] > temp_bt["adj_price"]).astype(int)
         temp_bt.dropna(inplace=True)
-
         backtest = compute_backtest_metrics(temp_bt, predictors, START, STEP, threshold=0.5)
 
         results = []
@@ -576,7 +625,6 @@ if run_button:
             pred_df = temp.iloc[START:].copy()
             pred_df["prob_up"] = probs
             latest_prob = float(pred_df["prob_up"].tail(1).values[0])
-
             stored_models[horizon_name] = last_model
 
             up_pct = round(latest_prob * 100, 0)
@@ -602,7 +650,7 @@ if run_button:
         ])
 
         # ----------------------------
-        # ✅ FIXED PART: Weekly/Monthly signals (NO CRASH if empty)
+        # ✅ Weekly/Monthly signals (safe)
         # ----------------------------
         status.info("Step 5/5: Creating charts + weekly summary...")
         progress.progress(90)
@@ -630,12 +678,10 @@ if run_button:
             prob_data = temp3.copy()
             prob_data["prob_up"] = np.nan
             prob_data["regime"] = "Neutral"
-
             monthly_signal = pd.DataFrame({"prob_up": [np.nan], "regime": ["Neutral"]})
             weekly_available = False
         else:
             probs3 = np.concatenate(all_probs_3)
-
             prob_data = temp3.iloc[START:].copy()
             prob_data["prob_up"] = probs3
             prob_data["regime"] = prob_data["prob_up"].apply(regime_from_prob)
@@ -676,6 +722,52 @@ if run_button:
         col5.metric("Backtest Win Rate (3M)", f"{backtest['win_rate']*100:.1f}%")
     else:
         col5.metric("Backtest Win Rate (3M)", "N/A")
+
+    # ----------------------------
+    # ✅ Metro Comparison Results (Top 3)
+    # ----------------------------
+    if compare_enabled:
+        st.markdown("---")
+        st.subheader("🏙️ Metro Comparison (Same State) — Top 3 by Deal Score")
+
+        sample_metros = state_metros[:12]  # small sample for speed
+        comp_rows = []
+
+        for m in sample_metros:
+            latest_prob_m = calc_metro_latest_prob(m, fed_data, predictors, START, STEP)
+            if latest_prob_m is None:
+                continue
+            comp_rows.append([m, f"{latest_prob_m*100:.0f}%", friendly_label(latest_prob_m), deal_score(latest_prob_m)])
+
+        if len(comp_rows) > 0:
+            comp_df = pd.DataFrame(comp_rows, columns=["Metro", "Up Chance (3M)", "Outlook", "Deal Score"])
+            comp_df = comp_df.sort_values("Deal Score", ascending=False).head(3)
+            st.dataframe(comp_df, use_container_width=True)
+        else:
+            st.info("Comparison needs more data. Try another metro/state.")
+
+    # ----------------------------
+    # ✅ Metro Ranking Results (Top N)
+    # ----------------------------
+    if rank_enabled:
+        st.markdown("---")
+        st.subheader(f"🏆 Metro Ranking — Top {rank_count} (State: {selected_state})")
+
+        ranking_rows = []
+        rank_metros = state_metros[:min(len(state_metros), rank_count * 5)]
+
+        for m in rank_metros:
+            latest_prob_m = calc_metro_latest_prob(m, fed_data, predictors, START, STEP)
+            if latest_prob_m is None:
+                continue
+            ranking_rows.append([m, f"{latest_prob_m*100:.0f}%", friendly_label(latest_prob_m), deal_score(latest_prob_m)])
+
+        if len(ranking_rows) > 0:
+            ranking_df = pd.DataFrame(ranking_rows, columns=["Metro", "Up Chance (3M)", "Outlook", "Deal Score"])
+            ranking_df = ranking_df.sort_values("Deal Score", ascending=False).head(rank_count)
+            st.dataframe(ranking_df, use_container_width=True)
+        else:
+            st.info("Not enough data to rank metros in this state.")
 
     # ----------------------------
     # ✅ Alerts
@@ -747,9 +839,7 @@ if run_button:
         mime="application/pdf"
     )
 
-    # ----------------------------
     # Weekly Prediction
-    # ----------------------------
     st.subheader("📌 Weekly Prediction")
     if not weekly_available:
         st.warning("⚠️ Weekly outlook could not be calculated (not enough data). Try another metro.")
@@ -764,9 +854,7 @@ if run_button:
             st.warning(f"✅ Weekly Outlook: {weekly_label}")
             st.write("This week is unclear. Prices could move up or down.")
 
-    # ----------------------------
     # Monthly Prediction
-    # ----------------------------
     st.subheader("📌 Monthly Prediction")
     latest_month_regime = monthly_signal["regime"].tail(1).values[0]
 
@@ -819,7 +907,6 @@ if run_button:
         st.info("⚠️ Weekly outlook chart is unavailable due to insufficient data.")
     else:
         recent = prob_data.tail(12)
-
         fig2, ax = plt.subplots(figsize=(12, 7))
         ax.plot(recent.index, recent["prob_up"], marker="o", linewidth=2.5, color="black")
         ax.axhline(0.65, color="green", linestyle="--", alpha=0.6)
