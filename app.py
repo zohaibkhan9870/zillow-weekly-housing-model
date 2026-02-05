@@ -837,6 +837,8 @@ else:
     else:
         st.info("ℹ️ Monthly Trend: 🟡 Still unclear")
         st.write("The bigger monthly trend is still unclear.")
+        Fix weekly forecast empty concatenate crash
+
 
 
 
