@@ -805,8 +805,7 @@ if run_button:
     else:
         st.warning(f"✅ Weekly Outlook: {weekly_label}")
         st.write("This week is unclear. Prices could move up or down.")
-
-    # ----------------------------
+        # ----------------------------
 # 📈 Weekly Probability Chart
 # ----------------------------
 st.markdown("---")
@@ -831,6 +830,7 @@ ax_w.legend()
 ax_w.grid(alpha=0.3)
 
 st.pyplot(fig_w)
+
 
     # Monthly Prediction
     st.subheader("📌 Monthly Prediction")
