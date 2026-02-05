@@ -832,9 +832,9 @@ ax_w.grid(alpha=0.3)
 st.pyplot(fig_w)
 
 
-    # Monthly Prediction
-    st.subheader("📌 Monthly Prediction")
-    latest_month_regime = monthly_signal["regime"].tail(1).values[0]
+# Monthly Prediction
+st.subheader("📌 Monthly Prediction")
+latest_month_regime = monthly_signal["regime"].tail(1).values[0]
 
     if latest_month_regime == "Bull":
         st.info("ℹ️ Monthly Trend: 🟢 Growing trend")
@@ -845,6 +845,32 @@ st.pyplot(fig_w)
     else:
         st.info("ℹ️ Monthly Trend: 🟡 Still unclear")
         st.write("The bigger monthly trend is still unclear.")
+        # ----------------------------
+# 📆 Monthly Trend Chart
+# ----------------------------
+st.markdown("---")
+st.subheader("📆 Monthly Trend (Smoothed Signal)")
+
+fig_m, ax_m = plt.subplots(figsize=(12, 4))
+
+ax_m.plot(
+    monthly_signal.index.astype(str),
+    monthly_signal["prob_up"],
+    marker="o",
+    linewidth=2
+)
+
+ax_m.axhline(0.65, linestyle="--", color="green", alpha=0.6)
+ax_m.axhline(0.45, linestyle="--", color="red", alpha=0.6)
+
+ax_m.set_ylim(0, 1)
+ax_m.set_ylabel("Avg Probability")
+ax_m.set_xlabel("Month")
+ax_m.set_title("Monthly Average Probability of Price Increase")
+ax_m.grid(alpha=0.3)
+
+st.pyplot(fig_m)
+
 
 
 
