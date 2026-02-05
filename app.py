@@ -627,18 +627,38 @@ if run_button:
             rf.fit(train[predictors], train["target"])
             return rf.predict_proba(test[predictors])[:, 1]
 
-        all_probs_3 = []
-        for i in range(START, temp3.shape[0], STEP):
-            train = temp3.iloc[:i]
-            test = temp3.iloc[i:i + STEP]
-            if len(test) == 0:
-                continue
-            all_probs_3.append(predict_proba_3(train, test))
+      all_probs_3 = []
+       for i in range(START, temp3.shape[0], STEP):
+       train = temp3.iloc[:i]
+      test = temp3.iloc[i:i + STEP]
+       if len(test) == 0:
+        continue
+      all_probs_3.append(predict_proba_3(train, test))
 
+     # ✅ CRASH-PROOF FIX
+      if len(all_probs_3) == 0:
+       prob_data = temp3.iloc[START:].copy()
+         prob_data["prob_up"] = np.nan
+         prob_data["regime"] = "Neutral"
+
+         monthly_signal = pd.DataFrame({
+        "prob_up": [np.nan],
+        "regime": ["Neutral"]
+        })
+       else:
         probs3 = np.concatenate(all_probs_3)
 
-        prob_data = temp3.iloc[START:].copy()
-        prob_data["prob_up"] = probs3
+         prob_data = temp3.iloc[START:].copy()
+       prob_data["prob_up"] = probs3
+        prob_data["regime"] = prob_data["prob_up"].apply(regime_from_prob)
+
+          monthly = prob_data.copy()
+          monthly["month"] = monthly.index.to_period("M")
+         monthly_signal = monthly.groupby("month").agg({
+        "prob_up": "mean",
+        "regime": lambda x: x.value_counts().index[0]
+          })
+
         prob_data["regime"] = prob_data["prob_up"].apply(regime_from_prob)
 
         monthly = prob_data.copy()
