@@ -8,309 +8,231 @@ from sklearn.ensemble import RandomForestClassifier
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.patches import Patch
+
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+import io
 
 
-# ----------------------------
-# Streamlit Setup
-# ----------------------------
+# -------------------------------------------------
+# Page setup
+# -------------------------------------------------
 st.set_page_config(
-    page_title="Weekly Zillow Housing Model",
+    page_title="US Real Estate Price Outlook",
     layout="wide"
 )
 
-st.title("🏡 Weekly Zillow Housing Model (Metro-Based)")
-st.write("Upload the Zillow files, choose a metro, and run the weekly housing model.")
+st.title("🏡 US Real Estate Price Outlook Dashboard")
+st.write("Zillow + FRED + Machine Learning → Simple, explainable housing signals")
 
 st.markdown("---")
 
 
-# ----------------------------
-# Main Screen Inputs
-# ----------------------------
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    price_file = st.file_uploader(
-        "📂 Upload Weekly Median Sale Price CSV",
-        type=["csv"]
-    )
-
-with col2:
-    value_file = st.file_uploader(
-        "📂 Upload ZHVI Home Value Index CSV",
-        type=["csv"]
-    )
-
-with col3:
-    TARGET_METRO = st.text_input(
-        "🏙 Enter Target Metro (example: Tampa)",
-        "Tampa"
-    )
-
-run_button = st.button("✅ Run Weekly Model")
-
-st.markdown("---")
+# -------------------------------------------------
+# Helpers
+# -------------------------------------------------
+def friendly_label(p):
+    if p >= 0.65:
+        return "🟢 Good time"
+    elif p <= 0.45:
+        return "🔴 Risky"
+    return "🟡 Unclear"
 
 
-# ----------------------------
-# FRED API Loader
-# ----------------------------
-def load_fred_series(series_id):
-    api_key = st.secrets["FRED_API_KEY"]
+def regime_from_prob(p):
+    if p >= 0.65:
+        return "Bull"
+    elif p <= 0.45:
+        return "Risk"
+    return "Neutral"
 
+
+def deal_score(p):
+    return int(np.clip(round(p * 100), 0, 100))
+
+
+def role_action(label, role):
+    if role == "Buyer":
+        return "Buy / negotiate" if "🟢" in label else "Wait / be selective"
+    if role == "Investor":
+        return "Deploy capital" if "🟢" in label else "Capital preservation"
+    return "Guide clients carefully"
+
+
+def expected_return(prob, weeks):
+    factor = np.sqrt(weeks / 13)
+    exp = (prob - 0.5) * 8 * factor
+    band = 4 * factor
+    return exp, exp - band, exp + band
+
+
+# -------------------------------------------------
+# FRED loader
+# -------------------------------------------------
+def load_fred(series_id):
     url = "https://api.stlouisfed.org/fred/series/observations"
     params = {
         "series_id": series_id,
-        "api_key": api_key,
+        "api_key": st.secrets["FRED_API_KEY"],
         "file_type": "json"
     }
-
     r = requests.get(url, params=params, timeout=30)
-
-    if r.status_code != 200:
-        raise Exception(f"FRED API failed for {series_id}")
-
-    data = r.json()
-
-    df = pd.DataFrame(data["observations"])
+    data = r.json()["observations"]
+    df = pd.DataFrame(data)
     df["date"] = pd.to_datetime(df["date"])
     df["value"] = pd.to_numeric(df["value"], errors="coerce")
-
-    df.set_index("date", inplace=True)
-    return df[["value"]]
+    return df.set_index("date")[["value"]]
 
 
-# ----------------------------
-# Main Run
-# ----------------------------
-if run_button:
+# -------------------------------------------------
+# Upload
+# -------------------------------------------------
+st.subheader("📤 Upload Zillow Files")
 
-    if not price_file or not value_file:
-        st.error("❌ Please upload BOTH Zillow CSV files.")
-        st.stop()
+col1, col2 = st.columns(2)
+with col1:
+    price_file = st.file_uploader("Weekly Median Sale Price", type="csv")
+with col2:
+    value_file = st.file_uploader("Monthly ZHVI", type="csv")
 
-    st.success("✅ Files uploaded successfully")
+if not price_file or not value_file:
+    st.info("Upload both Zillow files to continue.")
+    st.stop()
 
-    # ----------------------------
-    # Load Zillow Data
-    # ----------------------------
-    zillow_price = pd.read_csv(price_file)
-    zillow_value = pd.read_csv(value_file)
+price_df = pd.read_csv(price_file)
+value_df = pd.read_csv(value_file)
 
-    price_match = zillow_price[
-        zillow_price["RegionName"].str.contains(TARGET_METRO, case=False, na=False)
-    ]
 
-    value_match = zillow_value[
-        zillow_value["RegionName"].str.contains(TARGET_METRO, case=False, na=False)
-    ]
+# -------------------------------------------------
+# Location selection
+# -------------------------------------------------
+st.subheader("🌍 Select Location")
 
-    if price_match.empty or value_match.empty:
-        st.error(f"❌ Metro '{TARGET_METRO}' not found in Zillow data.")
-        st.stop()
-
-    if len(price_match) > 1:
-        st.warning("⚠️ Multiple metro matches found. Please refine the name.")
-        st.write(price_match["RegionName"].values)
-        st.stop()
-
-    metro_name = price_match["RegionName"].values[0]
-    st.info(f"✅ Using Zillow Metro: {metro_name}")
-
-    price = pd.DataFrame(price_match.iloc[0, 5:])
-    value = pd.DataFrame(value_match.iloc[0, 5:])
-
-    price.index = pd.to_datetime(price.index)
-    value.index = pd.to_datetime(value.index)
-
-    price.columns = ["price"]
-    value.columns = ["value"]
-
-    # ----------------------------
-    # Load FRED Data
-    # ----------------------------
-    try:
-        interest = load_fred_series("MORTGAGE30US").rename(columns={"value": "interest"})
-        vacancy = load_fred_series("RRVRUSQ156N").rename(columns={"value": "vacancy"})
-        cpi = load_fred_series("CPIAUCSL").rename(columns={"value": "cpi"})
-
-        fed = pd.concat([interest, vacancy, cpi], axis=1)
-        fed = fed.sort_index().ffill().dropna()
-
-        fed.index = fed.index + timedelta(days=2)
-
-    except Exception as e:
-        st.error("❌ Failed to load FRED data")
-        st.write(str(e))
-        st.stop()
-
-    # ----------------------------
-    # Merge Zillow Data
-    # ----------------------------
-    price["month"] = price.index.to_period("M")
-    value["month"] = value.index.to_period("M")
-
-    zillow = price.merge(value, on="month")
-    zillow.index = price.index
-    zillow.drop(columns="month", inplace=True)
-
-    # ----------------------------
-    # Merge All Data
-    # ----------------------------
-    data = fed.merge(zillow, left_index=True, right_index=True)
-
-    # ----------------------------
-    # Feature Engineering
-    # ----------------------------
-    data["adj_price"] = data["price"] / data["cpi"] * 100
-    data["adj_value"] = data["value"] / data["cpi"] * 100
-
-    data["next_q"] = data["adj_price"].shift(-13)
-    data["target"] = (data["next_q"] > data["adj_price"]).astype(int)
-
-    data["price_13w_change"] = data["adj_price"].pct_change(13)
-    data["value_52w_change"] = data["adj_value"].pct_change(52)
-
-    data.dropna(inplace=True)
-
-    predictors = [
-        "adj_price",
-        "adj_value",
-        "interest",
-        "price_13w_change",
-        "value_52w_change"
-    ]
-
-    # ----------------------------
-    # Walk-Forward Model
-    # ----------------------------
-    START = 260
-    STEP = 52
-
-    probs = []
-
-    for i in range(START, len(data), STEP):
-        train = data.iloc[:i]
-        test = data.iloc[i:i + STEP]
-
-        if len(test) == 0:
-            continue
-
-        model = RandomForestClassifier(
-            min_samples_split=10,
-            random_state=1
-        )
-
-        model.fit(train[predictors], train["target"])
-        p = model.predict_proba(test[predictors])[:, 1]
-        probs.append(p)
-
-    probs = np.concatenate(probs)
-
-    results = data.iloc[START:].copy()
-    results["prob_up"] = probs
-
-    # ----------------------------
-    # Regime Labels
-    # ----------------------------
-    def label_regime(p):
-        if p > 0.65:
-            return "Bull"
-        elif p < 0.45:
-            return "Risk"
-        return "Neutral"
-
-    results["regime"] = results["prob_up"].apply(label_regime)
-
-    # ----------------------------
-    # Monthly Summary
-    # ----------------------------
-    monthly = results.copy()
-    monthly["month"] = monthly.index.to_period("M")
-
-    monthly_signal = monthly.groupby("month").agg(
-        prob_up=("prob_up", "mean"),
-        regime=("regime", lambda x: x.value_counts().index[0])
+metros = sorted(
+    set(price_df["RegionName"]).intersection(
+        set(value_df["RegionName"])
     )
+)
 
-    # ----------------------------
-    # Output Tables
-    # ----------------------------
-    st.subheader("✅ Latest Weekly Signal")
-    st.dataframe(results[["prob_up", "regime"]].tail(1))
+selected_metro = st.selectbox("Choose Metro", metros)
 
-    st.subheader("✅ Latest Monthly Signal")
-    st.dataframe(monthly_signal.tail(1))
+role = st.selectbox("Client Type", ["Buyer", "Investor", "Agent"])
+run = st.button("✅ Run Forecast")
 
-    # ----------------------------
-    # Chart 1: Price + Regimes
-    # ----------------------------
-    st.subheader("📈 Price Trend & Risk Regimes")
+if not run:
+    st.stop()
 
-    fig = plt.figure(figsize=(14, 6))
 
-    plt.plot(
-        results.index,
-        results["adj_price"],
-        color="black",
-        linewidth=2
-    )
+# -------------------------------------------------
+# Data prep
+# -------------------------------------------------
+price = pd.DataFrame(price_df[price_df["RegionName"] == selected_metro].iloc[0, 5:])
+value = pd.DataFrame(value_df[value_df["RegionName"] == selected_metro].iloc[0, 5:])
 
-    for i in range(len(results) - 1):
-        c = (
-            "green" if results["regime"].iloc[i] == "Bull"
-            else "gold" if results["regime"].iloc[i] == "Neutral"
-            else "red"
-        )
+price.index = pd.to_datetime(price.index)
+value.index = pd.to_datetime(value.index)
 
-        plt.axvspan(
-            results.index[i],
-            results.index[i + 1],
-            color=c,
-            alpha=0.12
-        )
+price.columns = ["price"]
+value.columns = ["value"]
 
-    plt.title(f"{metro_name} Housing Market Regime")
-    plt.ylabel("Inflation-Adjusted Price")
+price["month"] = price.index.to_period("M")
+value["month"] = value.index.to_period("M")
 
-    legend = [
-        Patch(facecolor="green", alpha=0.3, label="Bull"),
-        Patch(facecolor="gold", alpha=0.3, label="Neutral"),
-        Patch(facecolor="red", alpha=0.3, label="Risk")
+zillow = price.merge(value, on="month")
+zillow.index = price.index
+zillow.drop(columns="month", inplace=True)
+
+
+# -------------------------------------------------
+# FRED
+# -------------------------------------------------
+interest = load_fred("MORTGAGE30US").rename(columns={"value": "interest"})
+cpi = load_fred("CPIAUCSL").rename(columns={"value": "cpi"})
+vacancy = load_fred("RRVRUSQ156N").rename(columns={"value": "vacancy"})
+
+macro = pd.concat([interest, cpi, vacancy], axis=1)
+macro = macro.sort_index().ffill().dropna()
+macro.index += timedelta(days=2)
+
+data = macro.merge(zillow, left_index=True, right_index=True)
+
+
+# -------------------------------------------------
+# Features
+# -------------------------------------------------
+data["adj_price"] = data["price"] / data["cpi"] * 100
+data["adj_value"] = data["value"] / data["cpi"] * 100
+data["p13"] = data["adj_price"].pct_change(13)
+data["v52"] = data["adj_value"].pct_change(52)
+data.dropna(inplace=True)
+
+predictors = ["adj_price", "adj_value", "interest", "vacancy", "p13", "v52"]
+
+
+# -------------------------------------------------
+# Forecast horizons
+# -------------------------------------------------
+horizons = {
+    "1 Month": 4,
+    "3 Months": 13,
+    "6 Months": 26,
+    "1 Year": 52
+}
+
+results = []
+
+for name, weeks in horizons.items():
+    temp = data.copy()
+    temp["future"] = temp["adj_price"].shift(-weeks)
+    temp["target"] = (temp["future"] > temp["adj_price"]).astype(int)
+    temp.dropna(inplace=True)
+
+    rf = RandomForestClassifier(min_samples_split=10, random_state=1)
+    rf.fit(temp[predictors], temp["target"])
+    prob = rf.predict_proba(temp[predictors].tail(1))[:, 1][0]
+
+    label = friendly_label(prob)
+    action = role_action(label, role)
+    exp, lo, hi = expected_return(prob, weeks)
+
+    results.append([
+        name,
+        f"{prob*100:.0f}%",
+        label,
+        deal_score(prob),
+        action,
+        f"{exp:+.1f}%",
+        f"[{lo:+.1f}%, {hi:+.1f}%]"
+    ])
+
+out = pd.DataFrame(
+    results,
+    columns=[
+        "Horizon",
+        "Up Probability",
+        "Outlook",
+        "Deal Score",
+        "Suggested Action",
+        "Expected Change",
+        "Expected Range"
     ]
+)
 
-    plt.legend(handles=legend)
-    st.pyplot(fig)
+# -------------------------------------------------
+# Output
+# -------------------------------------------------
+st.markdown("---")
+st.subheader("📊 Forecast Results")
+st.dataframe(out, use_container_width=True)
 
-    # ----------------------------
-    # Chart 2: Last 12 Weeks
-    # ----------------------------
-    st.subheader("📊 Weekly Outlook (Last 12 Weeks)")
+latest_prob = float(out.iloc[1]["Up Probability"].replace("%", "")) / 100
+st.metric("Weekly Signal", friendly_label(latest_prob))
+st.metric("Deal Score", deal_score(latest_prob))
 
-    recent = results.tail(12)
 
-    fig2, ax = plt.subplots(figsize=(12, 5))
-    ax.plot(recent.index, recent["prob_up"], marker="o", linewidth=2)
+# -------------------------------------------------
+# Download
+# -------------------------------------------------
+csv = out.to_csv(index=False).encode()
+st.download_button("⬇️ Download CSV", csv, f"{selected_metro}_forecast.csv")
 
-    ax.axhline(0.65, linestyle="--", alpha=0.6)
-    ax.axhline(0.45, linestyle="--", alpha=0.6)
-
-    ax.set_ylim(0, 1)
-    ax.set_ylabel("Probability of Price Increase")
-
-    st.pyplot(fig2)
-
-    # ----------------------------
-    # Plain English Summary
-    # ----------------------------
-    st.subheader("📌 Investor Summary")
-
-    latest = results.iloc[-1]
-
-    if latest["regime"] == "Bull":
-        st.success(f"🟢 Favorable housing conditions (prob={latest['prob_up']:.2f})")
-    elif latest["regime"] == "Neutral":
-        st.warning(f"🟡 Mixed housing signals (prob={latest['prob_up']:.2f})")
-    else:
-        st.error(f"🔴 Elevated housing risk (prob={latest['prob_up']:.2f})")
