@@ -115,7 +115,7 @@ value_df = pd.read_csv(value_file)
 
 
 # =================================================
-# LOCATION SELECTION (FIXED, FULLY INTEGRATED)
+# LOCATION SELECTION (SAFE + AUTO STATE)
 # =================================================
 st.subheader("🌍 Select Location")
 
@@ -127,14 +127,22 @@ metro_list = sorted(
 
 records = []
 for m in metro_list:
-    city, abbr = m.rsplit(",", 1)
-    abbr = abbr.strip()
-    if abbr in STATE_MAP:
-        records.append({
-            "metro_raw": m,
-            "metro_display": f"{city.strip()}, {STATE_MAP[abbr]}",
-            "state_full": STATE_MAP[abbr]
-        })
+    if "," not in m:
+        continue
+    parts = m.rsplit(",", 1)
+    if len(parts) != 2:
+        continue
+
+    city = parts[0].strip()
+    abbr = parts[1].strip()
+    if abbr not in STATE_MAP:
+        continue
+
+    records.append({
+        "metro_raw": m,
+        "metro_display": f"{city}, {STATE_MAP[abbr]}",
+        "state_full": STATE_MAP[abbr]
+    })
 
 metro_df = pd.DataFrame(records)
 
@@ -290,8 +298,11 @@ fig = plt.figure(figsize=(14, 6))
 plt.plot(prob_data.index, prob_data["adj_price"], color="black", linewidth=2)
 
 for i in range(len(prob_data) - 1):
-    color = "green" if prob_data["regime"].iloc[i] == "Supportive" else \
-            "gold" if prob_data["regime"].iloc[i] == "Unclear" else "red"
+    color = (
+        "green" if prob_data["regime"].iloc[i] == "Supportive"
+        else "gold" if prob_data["regime"].iloc[i] == "Unclear"
+        else "red"
+    )
     plt.axvspan(prob_data.index[i], prob_data.index[i + 1], color=color, alpha=0.15)
 
 legend_elements = [
