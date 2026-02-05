@@ -627,12 +627,12 @@ if run_button:
             rf.fit(train[predictors], train["target"])
             return rf.predict_proba(test[predictors])[:, 1]
 
-       all_probs_3 = []
-       for i in range(START, temp3.shape[0], STEP):
+    all_probs_3 = []
+    for i in range(START, temp3.shape[0], STEP):
     train = temp3.iloc[:i]
     test = temp3.iloc[i:i + STEP]
     if len(test) == 0:
-        continue
+    continue
     all_probs_3.append(predict_proba_3(train, test))
 
 # ✅ FIX: prevent empty concatenate crash
