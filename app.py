@@ -10,11 +10,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
-# ✅ PDF export
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
-import io
-
 
 # ----------------------------
 # Streamlit Setup
@@ -203,17 +198,13 @@ else:
 
 
 # ----------------------------
-# ✅ FRED API Loader (ONLY 3 SERIES)
+# ✅ FRED API Loader
 # ----------------------------
 def load_fred_series(series_id):
     api_key = st.secrets["FRED_API_KEY"]
 
     url = "https://api.stlouisfed.org/fred/series/observations"
-    params = {
-        "series_id": series_id,
-        "api_key": api_key,
-        "file_type": "json"
-    }
+    params = {"series_id": series_id, "api_key": api_key, "file_type": "json"}
 
     r = requests.get(url, params=params, timeout=30)
     if r.status_code != 200:
@@ -243,6 +234,15 @@ def friendly_label(prob_up):
         return "🟡 Unclear"
 
 
+def simple_action(label):
+    if "🟢" in label:
+        return "Buying/investing looks safer than usual."
+    elif "🔴" in label:
+        return "Be careful — risk is high."
+    else:
+        return "Wait and monitor the market."
+
+
 def regime_from_prob(p):
     if p >= 0.65:
         return "Bull"
@@ -250,143 +250,6 @@ def regime_from_prob(p):
         return "Risk"
     else:
         return "Neutral"
-
-
-# ✅ Upgrade #9: Role-based actions
-def role_based_action(label, user_role):
-    if user_role == "🏠 Home Buyer":
-        if "🟢" in label:
-            return "Buyer Mode: Safer time to buy. Negotiate and consider locking rate options."
-        elif "🔴" in label:
-            return "Buyer Mode: Risk is high. Prefer waiting or buying only if strongly discounted."
-        else:
-            return "Buyer Mode: Unclear market. Monitor price cuts and interest rates."
-    elif user_role == "💼 Investor":
-        if "🟢" in label:
-            return "Investor Mode: Supportive market. Consider entry strategies and value-add deals."
-        elif "🔴" in label:
-            return "Investor Mode: High downside risk. Prefer low leverage and strong cashflow."
-        else:
-            return "Investor Mode: Mixed signals. Stay selective and demand strong fundamentals."
-    else:  # Agent
-        if "🟢" in label:
-            return "Agent Mode: Supportive market. Expect stronger buyer activity."
-        elif "🔴" in label:
-            return "Agent Mode: Risky conditions. Expect slower sales and more reductions."
-        else:
-            return "Agent Mode: Mixed conditions. Track inventory and guide clients carefully."
-
-
-# ✅ Deal Score (0–100)
-def deal_score(prob_up):
-    score = int(round(prob_up * 100, 0))
-    return max(0, min(100, score))
-
-
-# ✅ Expected Return Estimates (simple)
-def expected_return_range(prob_up, horizon_weeks):
-    horizon_factor = np.sqrt(max(horizon_weeks, 1) / 13)
-    expected = (prob_up - 0.5) * 8.0 * horizon_factor
-    risk_band = 4.0 * horizon_factor
-    return float(expected), float(expected - risk_band), float(expected + risk_band)
-
-
-# ✅ Backtest / Win Rate
-def compute_backtest_metrics(temp_df, predictors, start_idx, step, threshold=0.5):
-    if temp_df.shape[0] <= start_idx + 10:
-        return None
-
-    def predict_proba(train, test):
-        rf = RandomForestClassifier(min_samples_split=10, random_state=1)
-        rf.fit(train[predictors], train["target"])
-        return rf.predict_proba(test[predictors])[:, 1]
-
-    all_probs = []
-    all_true = []
-
-    for i in range(start_idx, temp_df.shape[0], step):
-        train = temp_df.iloc[:i]
-        test = temp_df.iloc[i:i + step]
-        if len(test) == 0:
-            continue
-        probs = predict_proba(train, test)
-        all_probs.append(probs)
-        all_true.append(test["target"].values)
-
-    if len(all_probs) == 0:
-        return None
-
-    probs = np.concatenate(all_probs)
-    y_true = np.concatenate(all_true)
-    y_pred = (probs >= threshold).astype(int)
-
-    accuracy = float((y_pred == y_true).mean())
-    return {"accuracy": accuracy, "win_rate": accuracy, "n_samples": int(len(y_true))}
-
-
-# ✅ PDF report generator
-def generate_pdf_report(metro, out_df, weekly_label, monthly_regime, suggested_action, deal_score_value):
-    buffer = io.BytesIO()
-    c = canvas.Canvas(buffer, pagesize=letter)
-
-    width, height = letter
-    y = height - 50
-
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(50, y, "US Real Estate Price Outlook Report")
-    y -= 25
-
-    c.setFont("Helvetica", 12)
-    c.drawString(50, y, f"Metro: {metro}")
-    y -= 20
-
-    c.drawString(50, y, f"Deal Score (0-100): {deal_score_value}")
-    y -= 20
-
-    c.drawString(50, y, f"Weekly Outlook: {weekly_label}")
-    y -= 20
-
-    c.drawString(50, y, f"Monthly Trend: {monthly_regime}")
-    y -= 20
-
-    c.drawString(50, y, f"Suggested Action: {suggested_action}")
-    y -= 30
-
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(50, y, "Forecast Results:")
-    y -= 18
-
-    c.setFont("Helvetica", 10)
-    for _, row in out_df.iterrows():
-        line = f"{row['Time Horizon']}: Up {row['Price Up Chance (%)']} | Down {row['Price Down Chance (%)']} | {row['Outlook']}"
-        c.drawString(55, y, line)
-        y -= 14
-        if y < 80:
-            c.showPage()
-            y = height - 50
-
-    c.setFont("Helvetica-Oblique", 9)
-    c.drawString(50, 40, "Note: This report is generated automatically using Zillow + FRED data. For informational use only.")
-    c.save()
-
-    buffer.seek(0)
-    return buffer.read()
-
-
-# ✅ Upgrade #8: Feature Importance Plot
-def feature_importance_fig(model, feature_names, title="Feature Importance"):
-    importances = model.feature_importances_
-    fi_df = pd.DataFrame({"Feature": feature_names, "Importance": importances})
-    fi_df = fi_df.sort_values("Importance", ascending=False)
-
-    fig, ax = plt.subplots(figsize=(10, 5))
-    ax.bar(fi_df["Feature"], fi_df["Importance"])
-    ax.set_title(title, fontsize=13, weight="bold")
-    ax.set_ylabel("Importance")
-    ax.set_xlabel("Feature")
-    ax.tick_params(axis="x", rotation=45)
-    plt.tight_layout()
-    return fi_df, fig
 
 
 # ----------------------------
@@ -415,13 +278,9 @@ if metro_search:
 default_state_index = states.index(auto_state) if auto_state in states else 0
 selected_state = st.selectbox("Choose State", states, index=default_state_index)
 
-# ✅ FIX: Always keep full state metros for ranking/compare
-state_metros = [m for m in metro_list if m.endswith(f", {selected_state}")]
-
-# ✅ Search affects only dropdown list
-filtered_metros = state_metros
+filtered_metros = [m for m in metro_list if m.endswith(f", {selected_state}")]
 if metro_search:
-    filtered_metros = [m for m in state_metros if metro_search.lower() in m.lower()]
+    filtered_metros = [m for m in filtered_metros if metro_search.lower() in m.lower()]
 
 if len(filtered_metros) == 0:
     st.warning("⚠️ No metros found. Try another search or change state.")
@@ -429,43 +288,6 @@ if len(filtered_metros) == 0:
 
 default_metro_index = filtered_metros.index(auto_metro) if auto_metro in filtered_metros else 0
 selected_metro = st.selectbox("Choose Metro", filtered_metros, index=default_metro_index)
-
-# Client mode
-st.markdown("### 👤 Client Mode")
-user_role = st.selectbox("Choose client type", ["🏠 Home Buyer", "💼 Investor", "🧑‍💼 Agent"], index=0)
-
-# Advanced toggle
-show_advanced = st.checkbox("⚙️ Show Advanced Analytics", value=True)
-
-# Metro Comparison
-st.markdown("### 🏙️ Quick Compare (Top 3 Metros in Same State)")
-compare_enabled = st.checkbox("✅ Enable Metro Comparison", value=True)
-
-# ✅ Full Metro Ranking (fixed using state_metros)
-st.markdown("### 🏆 Metro Ranking (Selected State)")
-rank_enabled = st.checkbox("✅ Enable Full Metro Ranking", value=True)
-
-total_metros = len(state_metros)
-
-if total_metros < 3:
-    st.warning("⚠️ Not enough metros in this state to run ranking (need at least 3).")
-    rank_count = total_metros
-    rank_enabled = False
-else:
-    max_rank = min(25, total_metros)
-    default_rank = min(10, max_rank)
-
-    rank_count = st.slider(
-        "How many metros to rank?",
-        min_value=3,
-        max_value=max_rank,
-        value=default_rank
-    )
-
-# Alerts
-st.markdown("### 🔔 Alerts (Basic Version)")
-alerts_enabled = st.checkbox("✅ Enable Alerts", value=True)
-alert_threshold = st.slider("Alert Threshold (Up Chance)", 0.50, 0.80, 0.65, 0.01)
 
 run_button = st.button("✅ Run Forecast")
 
@@ -491,10 +313,15 @@ if run_button:
         progress.progress(30)
 
         interest = load_fred_series("MORTGAGE30US").rename(columns={"value": "interest"})
-        cpi = load_fred_series("CPIAUCSL").rename(columns={"value": "cpi"})
         vacancy = load_fred_series("RRVRUSQ156N").rename(columns={"value": "vacancy"})
+        cpi = load_fred_series("CPIAUCSL").rename(columns={"value": "cpi"})
 
-        fed_data = pd.concat([interest, cpi, vacancy], axis=1)
+        unemployment = load_fred_series("UNRATE").rename(columns={"value": "unemployment"})
+        jobs = load_fred_series("PAYEMS").rename(columns={"value": "jobs"})
+        permits = load_fred_series("PERMIT").rename(columns={"value": "permits"})
+        stress = load_fred_series("STLFSI4").rename(columns={"value": "stress"})
+
+        fed_data = pd.concat([interest, vacancy, cpi, unemployment, jobs, permits, stress], axis=1)
         fed_data = fed_data.sort_index().ffill().dropna()
         fed_data.index = fed_data.index + timedelta(days=2)
 
@@ -519,17 +346,23 @@ if run_button:
 
         data["adj_price"] = data["price"] / data["cpi"] * 100
         data["adj_value"] = data["value"] / data["cpi"] * 100
+
         data["price_13w_change"] = data["adj_price"].pct_change(13)
         data["value_52w_change"] = data["adj_value"].pct_change(52)
+
+        data["unemployment_13w_change"] = data["unemployment"].pct_change(13)
+        data["jobs_13w_change"] = data["jobs"].pct_change(13)
+        data["permits_13w_change"] = data["permits"].pct_change(13)
+        data["stress_13w_change"] = data["stress"].pct_change(13)
+
         data.dropna(inplace=True)
 
         predictors = [
-            "adj_price",
-            "adj_value",
-            "interest",
-            "vacancy",
-            "price_13w_change",
-            "value_52w_change"
+            "adj_price", "adj_value", "interest", "vacancy",
+            "price_13w_change", "value_52w_change",
+            "unemployment", "jobs", "permits", "stress",
+            "unemployment_13w_change", "jobs_13w_change",
+            "permits_13w_change", "stress_13w_change"
         ]
 
         START = 104
@@ -543,17 +376,7 @@ if run_button:
             "1 Year Ahead": 52
         }
 
-        # Backtest metrics (3M)
-        temp_bt = data.copy()
-        temp_bt["future_price"] = temp_bt["adj_price"].shift(-13)
-        temp_bt["target"] = (temp_bt["future_price"] > temp_bt["adj_price"]).astype(int)
-        temp_bt.dropna(inplace=True)
-
-        backtest = compute_backtest_metrics(temp_bt, predictors, START, STEP, threshold=0.5)
-
         results = []
-        stored_models = {}
-
         for horizon_name, weeks_ahead in horizons.items():
             temp = data.copy()
             temp["future_price"] = temp["adj_price"].shift(-weeks_ahead)
@@ -561,55 +384,37 @@ if run_button:
             temp.dropna(inplace=True)
 
             if temp.shape[0] <= START:
-                results.append([horizon_name, None, None, "Not enough data", "-", "-", "-"])
+                results.append([horizon_name, None, None, "Not enough data", "-"])
                 continue
 
-            def predict_proba(train, test, return_model=False):
+            def predict_proba(train, test):
                 rf = RandomForestClassifier(min_samples_split=10, random_state=1)
                 rf.fit(train[predictors], train["target"])
-                p = rf.predict_proba(test[predictors])[:, 1]
-                if return_model:
-                    return p, rf
-                return p
+                return rf.predict_proba(test[predictors])[:, 1]
 
             all_probs = []
-            last_model = None
-
             for i in range(START, temp.shape[0], STEP):
                 train = temp.iloc[:i]
                 test = temp.iloc[i:i + STEP]
                 if len(test) == 0:
                     continue
-                proba, last_model = predict_proba(train, test, return_model=True)
-                all_probs.append(proba)
+                all_probs.append(predict_proba(train, test))
 
             probs = np.concatenate(all_probs)
             pred_df = temp.iloc[START:].copy()
             pred_df["prob_up"] = probs
             latest_prob = float(pred_df["prob_up"].tail(1).values[0])
 
-            stored_models[horizon_name] = last_model
-
             up_pct = round(latest_prob * 100, 0)
             down_pct = round((1 - latest_prob) * 100, 0)
 
             label = friendly_label(latest_prob)
-            action = role_based_action(label, user_role)
+            action = simple_action(label)
 
-            exp_ret, exp_low, exp_high = expected_return_range(latest_prob, weeks_ahead)
-            exp_ret_str = f"{exp_ret:+.1f}%"
-            exp_range_str = f"[{exp_low:+.1f}%, {exp_high:+.1f}%]"
-
-            results.append([horizon_name, f"{int(up_pct)}%", f"{int(down_pct)}%", label, action, exp_ret_str, exp_range_str])
+            results.append([horizon_name, f"{int(up_pct)}%", f"{int(down_pct)}%", label, action])
 
         out_df = pd.DataFrame(results, columns=[
-            "Time Horizon",
-            "Price Up Chance (%)",
-            "Price Down Chance (%)",
-            "Outlook",
-            "Suggested Action",
-            "Expected Change (%)",
-            "Expected Range (%)"
+            "Time Horizon", "Price Up Chance (%)", "Price Down Chance (%)", "Outlook", "Suggested Action"
         ])
 
         # Weekly + Monthly signals (3 month horizon)
@@ -627,38 +432,18 @@ if run_button:
             rf.fit(train[predictors], train["target"])
             return rf.predict_proba(test[predictors])[:, 1]
 
-      all_probs_3 = []
-       for i in range(START, temp3.shape[0], STEP):
-       train = temp3.iloc[:i]
-      test = temp3.iloc[i:i + STEP]
-       if len(test) == 0:
-        continue
-      all_probs_3.append(predict_proba_3(train, test))
+        all_probs_3 = []
+        for i in range(START, temp3.shape[0], STEP):
+            train = temp3.iloc[:i]
+            test = temp3.iloc[i:i + STEP]
+            if len(test) == 0:
+                continue
+            all_probs_3.append(predict_proba_3(train, test))
 
-     # ✅ CRASH-PROOF FIX
-      if len(all_probs_3) == 0:
-       prob_data = temp3.iloc[START:].copy()
-         prob_data["prob_up"] = np.nan
-         prob_data["regime"] = "Neutral"
-
-         monthly_signal = pd.DataFrame({
-        "prob_up": [np.nan],
-        "regime": ["Neutral"]
-        })
-       else:
         probs3 = np.concatenate(all_probs_3)
 
-         prob_data = temp3.iloc[START:].copy()
-       prob_data["prob_up"] = probs3
-        prob_data["regime"] = prob_data["prob_up"].apply(regime_from_prob)
-
-          monthly = prob_data.copy()
-          monthly["month"] = monthly.index.to_period("M")
-         monthly_signal = monthly.groupby("month").agg({
-        "prob_up": "mean",
-        "regime": lambda x: x.value_counts().index[0]
-          })
-
+        prob_data = temp3.iloc[START:].copy()
+        prob_data["prob_up"] = probs3
         prob_data["regime"] = prob_data["prob_up"].apply(regime_from_prob)
 
         monthly = prob_data.copy()
@@ -671,125 +456,17 @@ if run_button:
         status.success("✅ Done! Forecast is ready.")
         progress.progress(100)
 
-    # KPI Summary
-    st.markdown("---")
-    st.subheader("📌 Quick Summary (Client Value KPIs)")
+    with st.expander("ℹ️ What does this forecast mean? (Simple explanation)"):
+        st.write("✅ **Price Up Chance (%)** = chance home prices may rise.")
+        st.write("✅ **Price Down Chance (%)** = chance home prices may fall.")
+        st.write("✅ **Outlook** shows the simple signal:")
+        st.write("• 🟢 Good time = more chance of prices going up")
+        st.write("• 🟡 Unclear = mixed signals (could go up or down)")
+        st.write("• 🔴 Risky = higher downside risk")
 
-    latest_week_prob = float(prob_data["prob_up"].tail(1).values[0])
-    weekly_label = friendly_label(latest_week_prob)
-    weekly_action = role_based_action(weekly_label, user_role)
-    deal_score_value = deal_score(latest_week_prob)
-
-    col1, col2, col3, col4, col5 = st.columns(5)
-    col1.metric("Weekly Score", f"{latest_week_prob:.2f}")
-    col2.metric("Deal Score (0-100)", f"{deal_score_value}")
-    col3.metric("Signal", weekly_label.replace("🟢 ", "").replace("🟡 ", "").replace("🔴 ", ""))
-    col4.metric("Client Mode", user_role.replace("🏠 ", "").replace("💼 ", "").replace("🧑‍💼 ", ""))
-    if backtest is not None:
-        col5.metric("Backtest Win Rate (3M)", f"{backtest['win_rate']*100:.1f}%")
-    else:
-        col5.metric("Backtest Win Rate (3M)", "N/A")
-
-    # Alerts
-    if alerts_enabled:
-        st.markdown("---")
-        st.subheader("🔔 Alert Status")
-        if latest_week_prob >= alert_threshold:
-            st.success(f"✅ ALERT TRIGGERED: Weekly score {latest_week_prob:.2f} ≥ threshold {alert_threshold:.2f}")
-        else:
-            st.info(f"ℹ️ No alert: Weekly score {latest_week_prob:.2f} < threshold {alert_threshold:.2f}")
-
-    # ✅ Metro Comparison Results (now always uses state_metros)
-    if compare_enabled:
-        st.markdown("---")
-        st.subheader("🏙️ Metro Comparison (Same State) — Top 3 by Deal Score")
-
-        sample_metros = state_metros[:8]
-        comp_rows = []
-
-        for m in sample_metros:
-            pm = zillow_price[zillow_price["RegionName"] == m]
-            if len(pm) == 0:
-                continue
-
-            p = pd.DataFrame(pm.iloc[0, 5:])
-            p.index = pd.to_datetime(p.index)
-
-            if len(p) < 30:
-                continue
-
-            pct = p.iloc[:, 0].pct_change(13).dropna()
-            if pct.empty:
-                continue
-
-            proxy = 0.50 + np.clip(float(pct.tail(1).values[0]), -0.10, 0.10) * 2.0
-            proxy = float(np.clip(proxy, 0.05, 0.95))
-
-            comp_rows.append([m, f"{proxy*100:.0f}%", friendly_label(proxy), deal_score(proxy)])
-
-        if len(comp_rows) > 0:
-            comp_df = pd.DataFrame(comp_rows, columns=["Metro", "Up Chance (Fast)", "Outlook", "Deal Score"])
-            comp_df = comp_df.sort_values("Deal Score", ascending=False).head(3)
-            st.dataframe(comp_df, use_container_width=True)
-        else:
-            st.info("Comparison needs more data. Try another state or metro.")
-
-    # ✅ Metro Ranking Results (now always uses state_metros)
-    if rank_enabled:
-        st.markdown("---")
-        st.subheader(f"🏆 Metro Ranking — Top {rank_count} (State: {selected_state})")
-
-        ranking_rows = []
-        for m in state_metros[:rank_count * 2]:
-            pm = zillow_price[zillow_price["RegionName"] == m]
-            if len(pm) == 0:
-                continue
-
-            p = pd.DataFrame(pm.iloc[0, 5:])
-            p.index = pd.to_datetime(p.index)
-            if len(p) < 30:
-                continue
-
-            pct = p.iloc[:, 0].pct_change(13).dropna()
-            if pct.empty:
-                continue
-
-            proxy_prob = 0.50 + np.clip(float(pct.tail(1).values[0]), -0.10, 0.10) * 2.0
-            proxy_prob = float(np.clip(proxy_prob, 0.05, 0.95))
-
-            ranking_rows.append([
-                m,
-                f"{proxy_prob*100:.0f}%",
-                friendly_label(proxy_prob),
-                deal_score(proxy_prob)
-            ])
-
-        if len(ranking_rows) > 0:
-            ranking_df = pd.DataFrame(ranking_rows, columns=["Metro", "Proxy Up Chance (Fast)", "Outlook", "Deal Score"])
-            ranking_df = ranking_df.sort_values("Deal Score", ascending=False).head(rank_count)
-            st.dataframe(ranking_df, use_container_width=True)
-        else:
-            st.info("Not enough ranking data for this state.")
-
-    # Feature importance
-    if show_advanced:
-        st.markdown("---")
-        st.subheader("🧠 Why the Model Thinks This (Feature Importance)")
-        chosen_horizon = st.selectbox("Choose horizon for explainability", list(horizons.keys()), index=2)
-
-        model_for_horizon = stored_models.get(chosen_horizon)
-        if model_for_horizon is not None:
-            fi_df, fi_fig = feature_importance_fig(model_for_horizon, predictors, title=f"Feature Importance ({chosen_horizon})")
-            st.pyplot(fi_fig)
-            st.dataframe(fi_df.head(6), use_container_width=True)
-        else:
-            st.info("Explainability not available for this horizon.")
-
-    # Forecast Results Table
     st.subheader("✅ Forecast Results (All Time Horizons)")
     st.dataframe(out_df, use_container_width=True)
 
-    # Downloads
     csv_bytes = out_df.to_csv(index=False).encode("utf-8")
     st.download_button(
         label="⬇️ Download Results CSV",
@@ -798,24 +475,11 @@ if run_button:
         mime="text/csv"
     )
 
-    pdf_bytes = generate_pdf_report(
-        metro=selected_metro,
-        out_df=out_df,
-        weekly_label=weekly_label,
-        monthly_regime=monthly_signal["regime"].tail(1).values[0],
-        suggested_action=weekly_action,
-        deal_score_value=deal_score_value
-    )
-
-    st.download_button(
-        label="📄 Download PDF Report",
-        data=pdf_bytes,
-        file_name=f"{selected_metro.replace(',', '').replace(' ', '_')}_forecast_report.pdf",
-        mime="application/pdf"
-    )
-
-    # Weekly Prediction
     st.subheader("📌 Weekly Prediction")
+    latest_week_prob = float(prob_data["prob_up"].tail(1).values[0])
+    weekly_label = friendly_label(latest_week_prob)
+    weekly_action = simple_action(weekly_label)
+
     if "🟢" in weekly_label:
         st.success(f"✅ Weekly Outlook: {weekly_label}")
         st.write("This week looks supportive. Prices are more likely to go up.")
@@ -826,7 +490,6 @@ if run_button:
         st.warning(f"✅ Weekly Outlook: {weekly_label}")
         st.write("This week is unclear. Prices could move up or down.")
 
-    # Monthly Prediction
     st.subheader("📌 Monthly Prediction")
     latest_month_regime = monthly_signal["regime"].tail(1).values[0]
 
@@ -840,5 +503,61 @@ if run_button:
         st.info("ℹ️ Monthly Trend: 🟡 Still unclear")
         st.write("The bigger monthly trend is still unclear.")
 
+    st.subheader("👉 Suggested Action")
+    st.write(weekly_action)
+
+    st.subheader("📈 Price Trend + Risk Background (3-Month Outlook)")
+    fig1 = plt.figure(figsize=(14, 6))
+    plt.plot(prob_data.index, prob_data["adj_price"], color="black", linewidth=2)
+
+    for i in range(len(prob_data) - 1):
+        regime = prob_data["regime"].iloc[i]
+        if regime == "Bull":
+            color = "green"
+        elif regime == "Neutral":
+            color = "gold"
+        else:
+            color = "red"
+        plt.axvspan(prob_data.index[i], prob_data.index[i + 1], color=color, alpha=0.12)
+
+    plt.title(f"{selected_metro} Housing Price Trend (With Risk Zones)", fontsize=14, weight="bold")
+    plt.ylabel("Inflation-Adjusted Price")
+    plt.xlabel("Date")
+
+    legend_elements = [
+        Patch(facecolor="green", alpha=0.25, label="Supportive"),
+        Patch(facecolor="gold", alpha=0.25, label="Unclear"),
+        Patch(facecolor="red", alpha=0.25, label="Risky"),
+    ]
+    plt.legend(handles=legend_elements, loc="upper left")
+
+    plt.tight_layout()
+    st.pyplot(fig1)
+
+    st.subheader("📊 Weekly Outlook (Last 12 Weeks)")
+    recent = prob_data.tail(12)
+
+    fig2, ax = plt.subplots(figsize=(12, 7))
+    ax.plot(recent.index, recent["prob_up"], marker="o", linewidth=2.5, color="black")
+    ax.axhline(0.65, color="green", linestyle="--", alpha=0.6)
+    ax.axhline(0.45, color="red", linestyle="--", alpha=0.6)
+
+    ax.set_title("Weekly Outlook Score (Last 12 Weeks)", fontsize=14, weight="bold")
+    ax.set_ylabel("Outlook Score (0 to 1)")
+    ax.set_xlabel("Week")
+    ax.set_ylim(0, 1)
+    ax.grid(alpha=0.3)
+
+    explanation_text = (
+        "HOW TO READ THIS CHART (Simple)\n"
+        "• Black line with dots: Weekly outlook score (higher = better).\n"
+        "• Green dotted line (0.65): Above = Good time (supportive market).\n"
+        "• Red dotted line (0.45): Below = Risky time (higher downside risk).\n"
+        "• X-axis = Weeks (time) | Y-axis = Score from 0 to 1."
+    )
+
+    fig2.text(0.5, 0.01, explanation_text, ha="center", va="bottom", fontsize=10)
+    plt.tight_layout(rect=[0, 0.12, 1, 1])
+    st.pyplot(fig2)
 
 
