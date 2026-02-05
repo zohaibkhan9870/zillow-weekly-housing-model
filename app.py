@@ -4,6 +4,7 @@ import numpy as np
 import requests
 from datetime import timedelta
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
 
 import matplotlib
 matplotlib.use("Agg")
@@ -50,9 +51,6 @@ def regime_from_prob(p):
     if p >= 0.65: return "Supportive"
     elif p <= 0.45: return "Risky"
     return "Unclear"
-
-def deal_score(p):
-    return int(np.clip(round(p*100),0,100))
 
 def suggested_action(prob):
     if prob >= 0.65:
@@ -206,6 +204,12 @@ temp.dropna(inplace=True)
 
 rf=RandomForestClassifier(min_samples_split=10,random_state=1)
 rf.fit(temp[predictors],temp["target"])
+
+# ✅ Dynamic metro-specific accuracy
+preds=rf.predict(temp[predictors])
+acc=accuracy_score(temp["target"],preds)
+confidence_pct=int(round(acc*100))
+
 probs=rf.predict_proba(temp[predictors])[:,1]
 
 prob_data=temp.copy()
@@ -226,7 +230,7 @@ city,state_abbr=selected_metro.rsplit(",",1)
 st.markdown(f"## 📌 Market Snapshot — {city}, {state_abbr}")
 
 st.write(f"**Market Outlook:** {clean_label}")
-st.write("**Confidence:** Medium (~52% historical accuracy)")
+st.write(f"**Confidence:** ~{confidence_pct}% historical accuracy")
 st.write(f"**Suggested Action:** {suggested_action(latest_prob)}")
 
 st.markdown("### Why this outlook:")
@@ -235,7 +239,7 @@ for r in simple_reasons(latest_prob):
 
 
 # =================================================
-# METRO COMPARISON (UPDATED)
+# METRO COMPARISON
 # =================================================
 st.markdown("---")
 st.subheader("🏙️ Metro Comparison (Same State) — Top 3")
@@ -312,5 +316,3 @@ ax.set_ylim(0,1)
 
 st.pyplot(fig2)
 st.caption("Above 0.65 = supportive • Below 0.45 = risky")
-
-
