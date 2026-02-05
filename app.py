@@ -20,30 +20,37 @@ st.set_page_config(
 )
 
 st.title("🏡 Weekly Zillow Housing Model (Metro-Based)")
-st.write("Upload the two Zillow CSV files and run the model metro-wise.")
+st.write("Upload the Zillow files, choose a metro, and run the weekly housing model.")
+
+st.markdown("---")
 
 
 # ----------------------------
-# Sidebar Inputs
+# Main Screen Inputs
 # ----------------------------
-st.sidebar.header("📂 Upload Zillow Files")
+col1, col2, col3 = st.columns(3)
 
-price_file = st.sidebar.file_uploader(
-    "Upload Weekly Median Sale Price CSV",
-    type=["csv"]
-)
+with col1:
+    price_file = st.file_uploader(
+        "📂 Upload Weekly Median Sale Price CSV",
+        type=["csv"]
+    )
 
-value_file = st.sidebar.file_uploader(
-    "Upload ZHVI Home Value Index CSV",
-    type=["csv"]
-)
+with col2:
+    value_file = st.file_uploader(
+        "📂 Upload ZHVI Home Value Index CSV",
+        type=["csv"]
+    )
 
-TARGET_METRO = st.sidebar.text_input(
-    "Enter Target Metro (example: Tampa)",
-    "Tampa"
-)
+with col3:
+    TARGET_METRO = st.text_input(
+        "🏙 Enter Target Metro (example: Tampa)",
+        "Tampa"
+    )
 
-run_button = st.sidebar.button("✅ Run Weekly Model")
+run_button = st.button("✅ Run Weekly Model")
+
+st.markdown("---")
 
 
 # ----------------------------
@@ -100,11 +107,11 @@ if run_button:
     ]
 
     if price_match.empty or value_match.empty:
-        st.error(f"❌ Metro '{TARGET_METRO}' not found.")
+        st.error(f"❌ Metro '{TARGET_METRO}' not found in Zillow data.")
         st.stop()
 
     if len(price_match) > 1:
-        st.warning("⚠️ Multiple metro matches found:")
+        st.warning("⚠️ Multiple metro matches found. Please refine the name.")
         st.write(price_match["RegionName"].values)
         st.stop()
 
@@ -205,16 +212,16 @@ if run_button:
     results["prob_up"] = probs
 
     # ----------------------------
-    # Regime Classification
+    # Regime Labels
     # ----------------------------
-    def regime(p):
+    def label_regime(p):
         if p > 0.65:
             return "Bull"
         elif p < 0.45:
             return "Risk"
         return "Neutral"
 
-    results["regime"] = results["prob_up"].apply(regime)
+    results["regime"] = results["prob_up"].apply(label_regime)
 
     # ----------------------------
     # Monthly Summary
@@ -302,8 +309,8 @@ if run_button:
     latest = results.iloc[-1]
 
     if latest["regime"] == "Bull":
-        st.success(f"🟢 Favorable conditions (prob={latest['prob_up']:.2f})")
+        st.success(f"🟢 Favorable housing conditions (prob={latest['prob_up']:.2f})")
     elif latest["regime"] == "Neutral":
-        st.warning(f"🟡 Mixed signals (prob={latest['prob_up']:.2f})")
+        st.warning(f"🟡 Mixed housing signals (prob={latest['prob_up']:.2f})")
     else:
-        st.error(f"🔴 Elevated risk (prob={latest['prob_up']:.2f})")
+        st.error(f"🔴 Elevated housing risk (prob={latest['prob_up']:.2f})")
