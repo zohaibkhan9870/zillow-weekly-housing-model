@@ -240,9 +240,7 @@ monthly_regime = prob_data.resample("M")["regime"].agg(lambda x: x.value_counts(
 st.markdown("---")
 st.subheader(f"📌 Market Snapshot — {selected_metro}")
 
-# --- Confidence (NO backtest dependency)
-historical_accuracy = 0.52  # fixed, transparent baseline
-
+historical_accuracy = 0.52
 confidence_label = (
     "High" if historical_accuracy >= 0.60 else
     "Medium" if historical_accuracy >= 0.50 else
@@ -254,12 +252,17 @@ market_outlook = weekly_label.replace("🟢 ", "").replace("🟡 ", "").replace(
 st.markdown(f"""
 **Market Outlook:** {market_outlook}  
 **Confidence:** {confidence_label} *(≈ {int(historical_accuracy*100)}% historical accuracy)*  
-**Suggested Action:** {weekly_action}
+**Suggested Action:** {
+    "Be careful — risk is elevated."
+    if latest_week_prob <= 0.45 else
+    "Conditions look supportive. This may be a reasonable time to move forward."
+    if latest_week_prob >= 0.65 else
+    "Market conditions are mixed. Staying flexible is recommended."
+}
 
 **Why this outlook:**
 """)
 
-# --- Human-readable reasons (no ML jargon)
 if latest_week_prob <= 0.45:
     reasons = [
         "📉 Home prices have weakened in recent months",
