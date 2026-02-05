@@ -627,7 +627,7 @@ if run_button:
             rf.fit(train[predictors], train["target"])
             return rf.predict_proba(test[predictors])[:, 1]
 
-       all_probs_3 = []
+            all_probs_3 = []
 for i in range(START, temp3.shape[0], STEP):
     train = temp3.iloc[:i]
     test = temp3.iloc[i:i + STEP]
