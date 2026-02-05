@@ -16,7 +16,7 @@ from matplotlib.patches import Patch
 # =================================================
 st.set_page_config(page_title="US Real Estate Price Outlook", layout="wide")
 st.title("🏡 US Real Estate Price Outlook Dashboard")
-st.write("Zillow + FRED + ML → Simple, client-ready housing signals")
+st.write("Zillow + FRED + ML → Client-ready housing signals")
 st.markdown("---")
 
 
@@ -107,7 +107,7 @@ value_df = pd.read_csv(value_file)
 
 
 # =================================================
-# LOCATION SELECTION (NEW FORMAT)
+# LOCATION SELECTION
 # =================================================
 st.subheader("🌍 Select Location")
 
@@ -179,7 +179,7 @@ predictors = ["adj_price", "interest", "vacancy", "p13"]
 
 
 # =================================================
-# WEEKLY MODEL (3-MONTH OUTLOOK)
+# WEEKLY MODEL (3-MONTH)
 # =================================================
 weeks = 13
 temp = data.copy()
@@ -215,14 +215,44 @@ c5.metric("Backtest Win Rate (3M)", "≈ 52%")
 
 
 # =================================================
+# 🏙️ METRO COMPARISON (RESTORED)
+# =================================================
+st.markdown("---")
+st.subheader("🏙️ Metro Comparison (Same State) — Top 3 by Deal Score")
+
+rows = []
+for m in state_metros:
+    pm = price_df[price_df["RegionName"] == m]
+    if pm.empty:
+        continue
+    p = pd.DataFrame(pm.iloc[0, 5:])
+    p.index = pd.to_datetime(p.index)
+    p.columns = ["price"]
+
+    prob = proxy_up_probability(p["price"])
+    if prob is None:
+        continue
+
+    rows.append([m, f"{prob*100:.0f}%", friendly_label(prob), deal_score(prob)])
+
+if rows:
+    comp_df = pd.DataFrame(
+        rows,
+        columns=["Metro", "Up Chance (Fast)", "Outlook", "Deal Score"]
+    )
+    comp_df = comp_df.sort_values("Deal Score", ascending=False).head(3)
+    st.dataframe(comp_df, use_container_width=True)
+
+
+# =================================================
 # WEEKLY PREDICTION
 # =================================================
 st.markdown("---")
 st.subheader("📌 Weekly Prediction")
 st.info(f"Weekly Outlook: {weekly_label}")
 st.write(
-    "Supportive" if "🟢" in weekly_label
-    else "Risky" if "🔴" in weekly_label
+    "This week looks supportive." if "🟢" in weekly_label
+    else "This week looks risky." if "🔴" in weekly_label
     else "This week is unclear. Prices could move up or down."
 )
 
@@ -236,7 +266,7 @@ st.info(f"Monthly Trend: {monthly_regime}")
 
 
 # =================================================
-# 👉 SUGGESTED ACTION (NEW)
+# 👉 SUGGESTED ACTION
 # =================================================
 st.markdown("---")
 st.subheader("👉 Suggested Action")
@@ -296,6 +326,4 @@ ax.set_xlabel("Week")
 ax.set_title("Weekly Outlook Score (Last 12 Weeks)")
 st.pyplot(fig2)
 
-st.caption(
-    "How to read: Above 0.65 = supportive market. Below 0.45 = risky. Middle = unclear."
-)
+st.caption("Above 0.65 = supportive. Below 0.45 = risky. In-between = unclear.")
