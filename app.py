@@ -629,6 +629,10 @@ if run_button:
             rf = RandomForestClassifier(min_samples_split=10, random_state=1)
             rf.fit(train[predictors], train["target"])
             return rf.predict_proba(test[predictors])[:, 1]
+            def predict_proba_3(train, test):
+    rf = RandomForestClassifier(min_samples_split=10, random_state=1)
+    rf.fit(train[predictors], train["target"])
+    return rf.predict_proba(test[predictors])[:, 1]
 
             all_probs_3 = []
 for i in range(START, temp3.shape[0], STEP):
