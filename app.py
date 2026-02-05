@@ -43,23 +43,13 @@ def deal_score(p):
     return int(np.clip(round(p * 100), 0, 100))
 
 
-def suggested_action(prob, role):
+def suggested_action(prob):
     if prob >= 0.65:
-        if role == "Home Buyer":
-            return "Good conditions. You can move forward and negotiate with confidence."
-        elif role == "Investor":
-            return "Supportive market. Consider selective acquisitions."
-        else:
-            return "Expect stronger buyer activity."
+        return "Supportive conditions. This is generally a favorable time to move forward."
     elif prob <= 0.45:
-        if role == "Home Buyer":
-            return "Be careful — risk is high. Prefer waiting or strong discounts."
-        elif role == "Investor":
-            return "High downside risk. Focus on capital preservation."
-        else:
-            return "Expect slower sales and cautious buyers."
+        return "Be careful — risk is high. Waiting or demanding strong value may be prudent."
     else:
-        return "Market is unclear. Stay flexible and monitor trends closely."
+        return "Market conditions are unclear. Staying flexible and monitoring trends is advised."
 
 
 def proxy_up_probability(price_series):
@@ -107,7 +97,7 @@ value_df = pd.read_csv(value_file)
 
 
 # =================================================
-# LOCATION SELECTION
+# LOCATION SELECTION (AUTO STATE DETECTION)
 # =================================================
 st.subheader("🌍 Select Location")
 
@@ -119,16 +109,29 @@ metro_list = sorted(
 
 search = st.text_input("🔍 Search metro (optional)", "").strip()
 
-states = sorted({m.split(",")[-1].strip() for m in metro_list})
-state = st.selectbox("Choose State", states)
+# Build lookup maps
+metro_to_state = {m: m.split(",")[-1].strip() for m in metro_list}
+states = sorted(set(metro_to_state.values()))
+
+auto_state = None
+auto_metro = None
+
+if search:
+    matches = [m for m in metro_list if search.lower() in m.lower()]
+    if matches:
+        auto_metro = matches[0]
+        auto_state = metro_to_state[auto_metro]
+
+state_index = states.index(auto_state) if auto_state in states else 0
+state = st.selectbox("Choose State", states, index=state_index)
 
 state_metros = [m for m in metro_list if m.endswith(f", {state}")]
 if search:
     state_metros = [m for m in state_metros if search.lower() in m.lower()]
 
-selected_metro = st.selectbox("Choose Metro", state_metros)
+metro_index = state_metros.index(auto_metro) if auto_metro in state_metros else 0
+selected_metro = st.selectbox("Choose Metro", state_metros, index=metro_index)
 
-user_role = st.selectbox("Client Mode", ["Home Buyer", "Investor", "Agent"])
 run = st.button("✅ Run Forecast")
 
 if not run:
@@ -210,12 +213,12 @@ c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("Weekly Score", f"{latest_prob:.2f}")
 c2.metric("Deal Score (0-100)", deal_score(latest_prob))
 c3.metric("Signal", weekly_label.replace("🟢 ", "").replace("🟡 ", "").replace("🔴 ", ""))
-c4.metric("Client Mode", user_role)
+c4.metric("Metro", selected_metro)
 c5.metric("Backtest Win Rate (3M)", "≈ 52%")
 
 
 # =================================================
-# 🏙️ METRO COMPARISON (RESTORED)
+# METRO COMPARISON
 # =================================================
 st.markdown("---")
 st.subheader("🏙️ Metro Comparison (Same State) — Top 3 by Deal Score")
@@ -236,30 +239,18 @@ for m in state_metros:
     rows.append([m, f"{prob*100:.0f}%", friendly_label(prob), deal_score(prob)])
 
 if rows:
-    comp_df = pd.DataFrame(
-        rows,
-        columns=["Metro", "Up Chance (Fast)", "Outlook", "Deal Score"]
-    )
+    comp_df = pd.DataFrame(rows, columns=["Metro", "Up Chance (Fast)", "Outlook", "Deal Score"])
     comp_df = comp_df.sort_values("Deal Score", ascending=False).head(3)
     st.dataframe(comp_df, use_container_width=True)
 
 
 # =================================================
-# WEEKLY PREDICTION
+# WEEKLY & MONTHLY PREDICTION
 # =================================================
 st.markdown("---")
 st.subheader("📌 Weekly Prediction")
 st.info(f"Weekly Outlook: {weekly_label}")
-st.write(
-    "This week looks supportive." if "🟢" in weekly_label
-    else "This week looks risky." if "🔴" in weekly_label
-    else "This week is unclear. Prices could move up or down."
-)
 
-
-# =================================================
-# MONTHLY PREDICTION
-# =================================================
 st.markdown("---")
 st.subheader("📌 Monthly Prediction")
 st.info(f"Monthly Trend: {monthly_regime}")
@@ -270,7 +261,7 @@ st.info(f"Monthly Trend: {monthly_regime}")
 # =================================================
 st.markdown("---")
 st.subheader("👉 Suggested Action")
-st.write(suggested_action(latest_prob, user_role))
+st.write(suggested_action(latest_prob))
 
 
 # =================================================
@@ -288,12 +279,7 @@ for i in range(len(prob_data) - 1):
         else "gold" if prob_data["regime"].iloc[i] == "Unclear"
         else "red"
     )
-    plt.axvspan(
-        prob_data.index[i],
-        prob_data.index[i + 1],
-        color=color,
-        alpha=0.15
-    )
+    plt.axvspan(prob_data.index[i], prob_data.index[i + 1], color=color, alpha=0.15)
 
 legend_elements = [
     Patch(facecolor="green", alpha=0.3, label="Supportive"),
@@ -326,4 +312,4 @@ ax.set_xlabel("Week")
 ax.set_title("Weekly Outlook Score (Last 12 Weeks)")
 st.pyplot(fig2)
 
-st.caption("Above 0.65 = supportive. Below 0.45 = risky. In-between = unclear.")
+st.caption("Above 0.65 = supportive • Below 0.45 = risky • In-between = unclear")
