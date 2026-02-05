@@ -811,25 +811,28 @@ if run_button:
 st.markdown("---")
 st.subheader("📈 Weekly Price Direction Probability")
 
-fig_w, ax_w = plt.subplots(figsize=(12, 4))
+if "prob_data" in locals() and prob_data["prob_up"].notna().any():
+    fig_w, ax_w = plt.subplots(figsize=(12, 4))
 
-ax_w.plot(
-    prob_data.index,
-    prob_data["prob_up"],
-    linewidth=2,
-    label="Weekly Up Probability"
-)
+    ax_w.plot(
+        prob_data.index,
+        prob_data["prob_up"],
+        linewidth=2,
+        label="Weekly Up Probability"
+    )
 
-ax_w.axhline(0.65, linestyle="--", color="green", alpha=0.6, label="Bull Threshold")
-ax_w.axhline(0.45, linestyle="--", color="red", alpha=0.6, label="Risk Threshold")
+    ax_w.axhline(0.65, linestyle="--", color="green", alpha=0.6, label="Bull Threshold")
+    ax_w.axhline(0.45, linestyle="--", color="red", alpha=0.6, label="Risk Threshold")
 
-ax_w.set_ylim(0, 1)
-ax_w.set_ylabel("Probability")
-ax_w.set_title("Weekly Probability of Price Increase")
-ax_w.legend()
-ax_w.grid(alpha=0.3)
+    ax_w.set_ylim(0, 1)
+    ax_w.set_ylabel("Probability")
+    ax_w.set_title("Weekly Probability of Price Increase")
+    ax_w.legend()
+    ax_w.grid(alpha=0.3)
 
-st.pyplot(fig_w)
+    st.pyplot(fig_w)
+else:
+    st.info("ℹ️ Weekly probability chart not available (insufficient recent data).")
 
 
 # Monthly Prediction
@@ -845,31 +848,34 @@ elif latest_month_regime == "Risk":
 else:
         st.info("ℹ️ Monthly Trend: 🟡 Still unclear")
         st.write("The bigger monthly trend is still unclear.")
-        # ----------------------------
+       # ----------------------------
 # 📆 Monthly Trend Chart
 # ----------------------------
 st.markdown("---")
 st.subheader("📆 Monthly Trend (Smoothed Signal)")
 
-fig_m, ax_m = plt.subplots(figsize=(12, 4))
+if "monthly_signal" in locals() and monthly_signal["prob_up"].notna().any():
+    fig_m, ax_m = plt.subplots(figsize=(12, 4))
 
-ax_m.plot(
-    monthly_signal.index.astype(str),
-    monthly_signal["prob_up"],
-    marker="o",
-    linewidth=2
-)
+    ax_m.plot(
+        monthly_signal.index.astype(str),
+        monthly_signal["prob_up"],
+        marker="o",
+        linewidth=2
+    )
 
-ax_m.axhline(0.65, linestyle="--", color="green", alpha=0.6)
-ax_m.axhline(0.45, linestyle="--", color="red", alpha=0.6)
+    ax_m.axhline(0.65, linestyle="--", color="green", alpha=0.6)
+    ax_m.axhline(0.45, linestyle="--", color="red", alpha=0.6)
 
-ax_m.set_ylim(0, 1)
-ax_m.set_ylabel("Avg Probability")
-ax_m.set_xlabel("Month")
-ax_m.set_title("Monthly Average Probability of Price Increase")
-ax_m.grid(alpha=0.3)
+    ax_m.set_ylim(0, 1)
+    ax_m.set_ylabel("Avg Probability")
+    ax_m.set_xlabel("Month")
+    ax_m.set_title("Monthly Average Probability of Price Increase")
+    ax_m.grid(alpha=0.3)
 
-st.pyplot(fig_m)
+    st.pyplot(fig_m)
+else:
+    st.info("ℹ️ Monthly trend chart not available (insufficient data).")
 
 
 
