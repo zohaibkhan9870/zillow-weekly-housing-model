@@ -54,39 +54,16 @@ def regime_from_prob(p):
 
 def suggested_action(prob):
     if prob >= 0.65:
-        return "Good time to buy if the home fits your needs."
+        return "Conditions look favorable. Buying can make sense if the home fits your budget."
     elif prob <= 0.45:
-        return "Be careful. Only buy if the price is very good."
+        return "Risk is elevated. Negotiate hard or consider waiting."
     else:
-        return "Wait, compare options, and watch the market."
+        return "Mixed signals. Compare options and avoid rushing."
 
 def action_for_table(prob):
-    if prob >= 0.65:
-        return "Favorable — consider buying"
-    elif prob <= 0.45:
-        return "High risk — be cautious"
-    else:
-        return "Mixed — take your time"
-
-def simple_reasons(prob):
-    if prob >= 0.65:
-        return [
-            "📈 Prices have been rising",
-            "🏦 Buyers are active",
-            "✅ Momentum is positive"
-        ]
-    elif prob <= 0.45:
-        return [
-            "📉 Prices are not rising like before",
-            "💰 Loans are expensive right now",
-            "⚠️ The market could slow down more"
-        ]
-    else:
-        return [
-            "➡️ Prices are moving slowly",
-            "💸 Loans are still costly",
-            "🤔 Buyers are waiting"
-        ]
+    if prob >= 0.65: return "Favorable — consider buying"
+    elif prob <= 0.45: return "Risky — be cautious"
+    return "Mixed — take your time"
 
 def proxy_up_probability(price_series):
     pct = price_series.pct_change(13).dropna()
@@ -94,6 +71,33 @@ def proxy_up_probability(price_series):
     raw = float(pct.tail(1).values[0])
     prob = 0.50 + np.clip(raw,-0.10,0.10)*2.0
     return float(np.clip(prob,0.05,0.95))
+
+
+# --- DATA-DRIVEN REASONS (no guessing) ---
+def simple_reasons(latest_row, latest_prob):
+    reasons = []
+
+    # Price momentum
+    if latest_row["p13"] < 0:
+        reasons.append("📉 Prices are not rising like before")
+    else:
+        reasons.append("📈 Prices have been rising recently")
+
+    # Mortgage rate vs its historical median
+    if latest_row["interest"] > latest_row["interest_med"]:
+        reasons.append("💰 Loans are expensive right now")
+    else:
+        reasons.append("🏦 Loan rates are lower than usual")
+
+    # Model risk signal
+    if latest_prob <= 0.45:
+        reasons.append("⚠️ The market could slow down more")
+    elif latest_prob >= 0.65:
+        reasons.append("✅ Momentum suggests stability")
+    else:
+        reasons.append("🤔 The market direction is unclear")
+
+    return reasons
 
 
 # =================================================
@@ -114,6 +118,7 @@ def load_fred(series_id):
 # =================================================
 st.subheader("📤 Upload Zillow Files")
 c1,c2=st.columns(2)
+
 with c1:
     price_file=st.file_uploader("Weekly Median Sale Price CSV",type="csv")
 with c2:
@@ -142,7 +147,6 @@ for m in metro_list:
     if abbr not in STATE_MAP: continue
     records.append({
         "metro_raw":m,
-        "metro_display":f"{city}, {STATE_MAP[abbr]}",
         "state_full":STATE_MAP[abbr]
     })
 
@@ -152,8 +156,8 @@ selected_state=st.selectbox("Choose State",sorted(metro_df["state_full"].unique(
 state_metros_df=metro_df[metro_df["state_full"]==selected_state]
 selected_metro=st.selectbox("Choose Metro",state_metros_df["metro_raw"])
 
-run=st.button("✅ Run Forecast")
-if not run: st.stop()
+if not st.button("✅ Run Forecast"):
+    st.stop()
 
 
 # =================================================
@@ -164,6 +168,7 @@ value=pd.DataFrame(value_df[value_df["RegionName"]==selected_metro].iloc[0,5:])
 
 price.index=pd.to_datetime(price.index)
 value.index=pd.to_datetime(value.index)
+
 price.columns=["price"]
 value.columns=["value"]
 
@@ -176,7 +181,7 @@ zillow.drop(columns="month",inplace=True)
 
 
 # =================================================
-# LOAD FRED DATA
+# LOAD FRED
 # =================================================
 interest=load_fred("MORTGAGE30US").rename(columns={"value":"interest"})
 cpi=load_fred("CPIAUCSL").rename(columns={"value":"cpi"})
@@ -189,10 +194,12 @@ data=macro.merge(zillow,left_index=True,right_index=True)
 
 
 # =================================================
-# FEATURES + MODEL
+# FEATURES
 # =================================================
 data["adj_price"]=data["price"]/data["cpi"]*100
 data["p13"]=data["adj_price"].pct_change(13)
+data["interest_med"]=data["interest"].rolling(52).median()
+
 data.dropna(inplace=True)
 
 predictors=["adj_price","interest","vacancy","p13"]
@@ -202,39 +209,48 @@ temp["future"]=temp["adj_price"].shift(-13)
 temp["target"]=(temp["future"]>temp["adj_price"]).astype(int)
 temp.dropna(inplace=True)
 
-rf=RandomForestClassifier(min_samples_split=10,random_state=1)
-rf.fit(temp[predictors],temp["target"])
 
-# ✅ Dynamic metro-specific accuracy
-preds=rf.predict(temp[predictors])
-acc=accuracy_score(temp["target"],preds)
+# =================================================
+# PROFESSIONAL BACKTEST (Time Split)
+# =================================================
+split=int(len(temp)*0.7)
+train=temp.iloc[:split]
+test=temp.iloc[split:]
+
+rf=RandomForestClassifier(min_samples_split=10,random_state=1)
+rf.fit(train[predictors],train["target"])
+
+test_preds=rf.predict(test[predictors])
+acc=accuracy_score(test["target"],test_preds)
 confidence_pct=int(round(acc*100))
 
+# Probabilities for charting
 probs=rf.predict_proba(temp[predictors])[:,1]
+temp["prob_up"]=probs
+temp["regime"]=temp["prob_up"].apply(regime_from_prob)
 
-prob_data=temp.copy()
-prob_data["prob_up"]=probs
-prob_data["regime"]=prob_data["prob_up"].apply(regime_from_prob)
+latest_prob=float(temp["prob_up"].iloc[-1])
+latest_row=temp.iloc[-1]
 
-latest_prob=float(prob_data["prob_up"].iloc[-1])
 weekly_label=friendly_label(latest_prob)
 clean_label=weekly_label.replace("🟢 ","").replace("🟡 ","").replace("🔴 ","")
-monthly_regime=prob_data.resample("M")["regime"].agg(lambda x:x.value_counts().index[0]).iloc[-1]
+
+monthly_regime=temp.resample("M")["regime"].agg(lambda x:x.value_counts().index[0]).iloc[-1]
 
 
 # =================================================
-# MARKET SNAPSHOT
+# SNAPSHOT
 # =================================================
 st.markdown("---")
 city,state_abbr=selected_metro.rsplit(",",1)
-st.markdown(f"## 📌 Market Snapshot — {city}, {state_abbr}")
 
+st.markdown(f"## 📌 Market Snapshot — {city}, {state_abbr}")
 st.write(f"**Market Outlook:** {clean_label}")
-st.write(f"**Confidence:** ~{confidence_pct}% historical accuracy")
+st.write(f"**Confidence:** ~{confidence_pct}% tested accuracy")
 st.write(f"**Suggested Action:** {suggested_action(latest_prob)}")
 
 st.markdown("### Why this outlook:")
-for r in simple_reasons(latest_prob):
+for r in simple_reasons(latest_row, latest_prob):
     st.write(f"- {r}")
 
 
@@ -255,30 +271,14 @@ for m in state_metros_df["metro_raw"]:
     prob=proxy_up_probability(p["price"])
     if prob is None: continue
 
-    rows.append([
-        m,
-        f"{prob*100:.0f}%",
-        friendly_label(prob),
-        action_for_table(prob)
-    ])
+    rows.append([m,f"{prob*100:.0f}%",friendly_label(prob),action_for_table(prob)])
 
 if rows:
     comp_df=pd.DataFrame(rows,
-        columns=["Metro","Price Up Chance","Outlook","What to Do"])
-    comp_df=comp_df.sort_values("Price Up Chance",ascending=False).head(3)
+        columns=["Metro","Price Up Chance","Outlook","What to Do"]
+    ).sort_values("Price Up Chance",ascending=False).head(3)
+
     st.dataframe(comp_df,use_container_width=True)
-
-
-# =================================================
-# WEEKLY / MONTHLY
-# =================================================
-st.markdown("---")
-st.subheader("📌 Weekly Prediction")
-st.info(f"Weekly Outlook: {weekly_label}")
-
-st.markdown("---")
-st.subheader("📌 Monthly Prediction")
-st.info(f"Monthly Trend: {monthly_regime}")
 
 
 # =================================================
@@ -288,15 +288,14 @@ st.markdown("---")
 st.subheader("📈 Price Trend + Risk Background")
 
 fig=plt.figure(figsize=(14,6))
-plt.plot(prob_data.index,prob_data["adj_price"],color="black",linewidth=2)
+plt.plot(temp.index,temp["adj_price"],color="black",linewidth=2)
 
-for i in range(len(prob_data)-1):
-    color=("green" if prob_data["regime"].iloc[i]=="Supportive"
-           else "gold" if prob_data["regime"].iloc[i]=="Unclear"
+for i in range(len(temp)-1):
+    color=("green" if temp["regime"].iloc[i]=="Supportive"
+           else "gold" if temp["regime"].iloc[i]=="Unclear"
            else "red")
-    plt.axvspan(prob_data.index[i],prob_data.index[i+1],color=color,alpha=0.15)
+    plt.axvspan(temp.index[i],temp.index[i+1],color=color,alpha=0.15)
 
-plt.tight_layout()
 st.pyplot(fig)
 
 
@@ -306,7 +305,7 @@ st.pyplot(fig)
 st.markdown("---")
 st.subheader("📊 Weekly Outlook (Last 12 Weeks)")
 
-recent=prob_data.tail(12)
+recent=temp.tail(12)
 
 fig2,ax=plt.subplots(figsize=(12,5))
 ax.plot(recent.index,recent["prob_up"],marker="o",linewidth=2,color="black")
