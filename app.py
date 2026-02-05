@@ -613,6 +613,9 @@ if run_button:
         ])
 
         # Weekly + Monthly signals (3 month horizon)
+        START = 52
+        STEP = 26
+
         status.info("Step 5/5: Creating charts + weekly summary...")
         progress.progress(90)
 
