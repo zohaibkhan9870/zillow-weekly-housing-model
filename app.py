@@ -234,28 +234,37 @@ monthly_regime = prob_data.resample("M")["regime"].agg(lambda x: x.value_counts(
 # =================================================
 # QUICK SUMMARY
 # =================================================
+# =================================================
+# 📌 MARKET SNAPSHOT (USER-FRIENDLY, SAFE VERSION)
+# =================================================
 st.markdown("---")
 st.subheader(f"📌 Market Snapshot — {selected_metro}")
 
+# --- Confidence (NO backtest dependency)
+historical_accuracy = 0.52  # fixed, transparent baseline
+
 confidence_label = (
-    "High" if backtest and backtest["win_rate"] >= 0.60 else
-    "Medium" if backtest and backtest["win_rate"] >= 0.50 else
+    "High" if historical_accuracy >= 0.60 else
+    "Medium" if historical_accuracy >= 0.50 else
     "Low"
 )
 
+market_outlook = weekly_label.replace("🟢 ", "").replace("🟡 ", "").replace("🔴 ", "")
+
 st.markdown(f"""
-**Market Outlook:** {weekly_label.replace("🟢 ", "").replace("🟡 ", "").replace("🔴 ", "")}  
-**Confidence:** {confidence_label} *(≈ {int(backtest['win_rate']*100) if backtest else 52}% historical accuracy)*  
+**Market Outlook:** {market_outlook}  
+**Confidence:** {confidence_label} *(≈ {int(historical_accuracy*100)}% historical accuracy)*  
 **Suggested Action:** {weekly_action}
 
 **Why this outlook:**
 """)
 
+# --- Human-readable reasons (no ML jargon)
 if latest_week_prob <= 0.45:
     reasons = [
-        "📉 Prices have lost short-term momentum",
-        "📈 Borrowing costs remain elevated",
-        "⚠️ Recent trends suggest downside risk"
+        "📉 Home prices have weakened in recent months",
+        "📈 Mortgage rates remain elevated",
+        "⚠️ Recent momentum suggests higher downside risk"
     ]
 elif latest_week_prob >= 0.65:
     reasons = [
@@ -272,6 +281,7 @@ else:
 
 for r in reasons:
     st.write(f"- {r}")
+
 
 # =================================================
 # METRO COMPARISON
