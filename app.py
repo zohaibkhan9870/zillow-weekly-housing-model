@@ -628,40 +628,17 @@ if run_button:
             return rf.predict_proba(test[predictors])[:, 1]
 
         all_probs_3 = []
+        for i in range(START, temp3.shape[0], STEP):
+            train = temp3.iloc[:i]
+            test = temp3.iloc[i:i + STEP]
+            if len(test) == 0:
+                continue
+            all_probs_3.append(predict_proba_3(train, test))
 
-     for i in range(START, temp3.shape[0], STEP):
-    train = temp3.iloc[:i]
-    test = temp3.iloc[i:i + STEP]
+        probs3 = np.concatenate(all_probs_3)
 
-    # Skip weak splits
-    if len(test) == 0 or len(train) < 20:
-        continue
-
-    try:
-        probs_chunk = predict_proba_3(train, test)
-
-        if len(probs_chunk) > 0:
-            all_probs_3.append(probs_chunk)
-
-    except Exception:
-        continue
-
-
-# ✅ FIX: Handle empty case
-if len(all_probs_3) == 0:
-    st.error("❌ Not enough historical data for weekly/monthly forecast.")
-    st.warning("Try a larger metro or one with longer price history.")
-    st.stop()
-
-probs3 = np.concatenate(all_probs_3)
-
-prob_data = temp3.iloc[START:].copy()
-
-# Align lengths safely
-min_len = min(len(prob_data), len(probs3))
-prob_data = prob_data.iloc[:min_len]
-prob_data["prob_up"] = probs3[:min_len]
-
+        prob_data = temp3.iloc[START:].copy()
+        prob_data["prob_up"] = probs3
         prob_data["regime"] = prob_data["prob_up"].apply(regime_from_prob)
 
         monthly = prob_data.copy()
@@ -842,5 +819,6 @@ prob_data["prob_up"] = probs3[:min_len]
     else:
         st.info("ℹ️ Monthly Trend: 🟡 Still unclear")
         st.write("The bigger monthly trend is still unclear.")
+
 
 
