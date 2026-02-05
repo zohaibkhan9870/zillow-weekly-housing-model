@@ -637,7 +637,7 @@ def predict_proba_3(train, test):
 
 all_probs_3 = []
 
-    for i in range(START, temp3.shape[0], STEP):
+for i in range(START, temp3.shape[0], STEP):
 
     for i in range(START, temp3.shape[0], STEP):
     train = temp3.iloc[:i]
