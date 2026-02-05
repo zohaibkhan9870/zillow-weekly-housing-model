@@ -67,7 +67,7 @@ def suggested_action(prob):
     elif prob <= 0.45:
         return "Be careful — risk is high. Waiting or demanding strong value may be prudent."
     else:
-        return "Market conditions are unclear. Staying flexible and monitoring trends is advised."
+        return "Market conditions are mixed. Staying flexible is recommended."
 
 
 def proxy_up_probability(price_series):
@@ -115,7 +115,7 @@ value_df = pd.read_csv(value_file)
 
 
 # =================================================
-# LOCATION SELECTION (SAFE + AUTO STATE)
+# LOCATION SELECTION
 # =================================================
 st.subheader("🌍 Select Location")
 
@@ -228,21 +228,30 @@ prob_data["regime"] = prob_data["prob_up"].apply(regime_from_prob)
 
 latest_prob = float(prob_data["prob_up"].iloc[-1])
 weekly_label = friendly_label(latest_prob)
+clean_label = weekly_label.replace("🟢 ", "").replace("🟡 ", "").replace("🔴 ", "")
 monthly_regime = prob_data.resample("M")["regime"].agg(lambda x: x.value_counts().index[0]).iloc[-1]
 
 
 # =================================================
-# QUICK SUMMARY
+# MARKET SNAPSHOT (REPLACED QUICK SUMMARY)
 # =================================================
 st.markdown("---")
-st.subheader("📌 Quick Summary (Client Value KPIs)")
 
-c1, c2, c3, c4, c5 = st.columns(5)
-c1.metric("Weekly Score", f"{latest_prob:.2f}")
-c2.metric("Deal Score (0–100)", deal_score(latest_prob))
-c3.metric("Signal", weekly_label.replace("🟢 ", "").replace("🟡 ", "").replace("🔴 ", ""))
-c4.metric("Metro", selected_metro)
-c5.metric("Backtest Win Rate (3M)", "≈ 52%")
+city, state_abbr = selected_metro.rsplit(",", 1)
+state_full = STATE_MAP[state_abbr.strip()]
+
+st.markdown(f"## 📌 Market Snapshot — {city.strip()}, {state_abbr.strip()}")
+
+st.write(f"**Market Outlook:** {clean_label}")
+st.write("**Confidence:** Medium (~52% historical accuracy)")
+st.write(f"**Suggested Action:** {suggested_action(latest_prob)}")
+
+st.markdown("### Why this outlook:")
+st.markdown("""
+- ⚖️ Price signals are mixed  
+- 📊 Conflicting short-term trends  
+- 🔎 Market direction remains uncertain  
+""")
 
 
 # =================================================
@@ -319,7 +328,7 @@ st.pyplot(fig)
 
 
 # =================================================
-# WEEKLY OUTLOOK (LAST 12 WEEKS)
+# WEEKLY OUTLOOK
 # =================================================
 st.markdown("---")
 st.subheader("📊 Weekly Outlook (Last 12 Weeks)")
@@ -337,5 +346,3 @@ ax.set_title("Weekly Outlook Score (Last 12 Weeks)")
 st.pyplot(fig2)
 
 st.caption("Above 0.65 = supportive • Below 0.45 = risky • In-between = unclear")
-
-
