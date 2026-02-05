@@ -73,23 +73,20 @@ def proxy_up_probability(price_series):
     return float(np.clip(prob,0.05,0.95))
 
 
-# --- DATA-DRIVEN REASONS (no guessing) ---
+# --- DATA-DRIVEN REASONS ---
 def simple_reasons(latest_row, latest_prob):
     reasons = []
 
-    # Price momentum
     if latest_row["p13"] < 0:
         reasons.append("📉 Prices are not rising like before")
     else:
         reasons.append("📈 Prices have been rising recently")
 
-    # Mortgage rate vs its historical median
     if latest_row["interest"] > latest_row["interest_med"]:
         reasons.append("💰 Loans are expensive right now")
     else:
         reasons.append("🏦 Loan rates are lower than usual")
 
-    # Model risk signal
     if latest_prob <= 0.45:
         reasons.append("⚠️ The market could slow down more")
     elif latest_prob >= 0.65:
@@ -133,7 +130,7 @@ value_df=pd.read_csv(value_file)
 
 
 # =================================================
-# LOCATION SELECTION
+# LOCATION SELECTION + SEARCH
 # =================================================
 st.subheader("🌍 Select Location")
 
@@ -147,14 +144,33 @@ for m in metro_list:
     if abbr not in STATE_MAP: continue
     records.append({
         "metro_raw":m,
+        "metro_display":f"{city}, {STATE_MAP[abbr]}",
         "state_full":STATE_MAP[abbr]
     })
 
 metro_df=pd.DataFrame(records)
 
-selected_state=st.selectbox("Choose State",sorted(metro_df["state_full"].unique()))
+# --- Search box ---
+search=st.text_input("🔍 Search metro (optional)","").strip()
+
+auto_state=None
+auto_metro=None
+
+if search:
+    matches=metro_df[metro_df["metro_display"].str.lower().str.contains(search.lower())]
+    if not matches.empty:
+        auto_state=matches.iloc[0]["state_full"]
+        auto_metro=matches.iloc[0]["metro_raw"]
+
+states=sorted(metro_df["state_full"].unique())
+state_idx=states.index(auto_state) if auto_state in states else 0
+selected_state=st.selectbox("Choose State",states,index=state_idx)
+
 state_metros_df=metro_df[metro_df["state_full"]==selected_state]
-selected_metro=st.selectbox("Choose Metro",state_metros_df["metro_raw"])
+metro_list_state=state_metros_df["metro_raw"].tolist()
+
+metro_idx=metro_list_state.index(auto_metro) if auto_metro in metro_list_state else 0
+selected_metro=st.selectbox("Choose Metro",metro_list_state,index=metro_idx)
 
 if not st.button("✅ Run Forecast"):
     st.stop()
@@ -211,7 +227,7 @@ temp.dropna(inplace=True)
 
 
 # =================================================
-# PROFESSIONAL BACKTEST (Time Split)
+# PROFESSIONAL BACKTEST
 # =================================================
 split=int(len(temp)*0.7)
 train=temp.iloc[:split]
@@ -224,7 +240,6 @@ test_preds=rf.predict(test[predictors])
 acc=accuracy_score(test["target"],test_preds)
 confidence_pct=int(round(acc*100))
 
-# Probabilities for charting
 probs=rf.predict_proba(temp[predictors])[:,1]
 temp["prob_up"]=probs
 temp["regime"]=temp["prob_up"].apply(regime_from_prob)
@@ -252,6 +267,18 @@ st.write(f"**Suggested Action:** {suggested_action(latest_prob)}")
 st.markdown("### Why this outlook:")
 for r in simple_reasons(latest_row, latest_prob):
     st.write(f"- {r}")
+
+
+# =================================================
+# WEEKLY + MONTHLY PREDICTIONS
+# =================================================
+st.markdown("---")
+st.subheader("📌 Weekly Prediction")
+st.info(f"Weekly Outlook: {weekly_label}")
+
+st.markdown("---")
+st.subheader("📌 Monthly Prediction")
+st.info(f"Monthly Trend: {monthly_regime}")
 
 
 # =================================================
@@ -300,7 +327,7 @@ st.pyplot(fig)
 
 
 # =================================================
-# WEEKLY OUTLOOK
+# WEEKLY OUTLOOK CHART
 # =================================================
 st.markdown("---")
 st.subheader("📊 Weekly Outlook (Last 12 Weeks)")
