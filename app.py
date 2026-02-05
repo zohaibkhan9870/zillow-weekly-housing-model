@@ -8,15 +8,15 @@ from sklearn.ensemble import RandomForestClassifier
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 
 
 # =================================================
 # PAGE SETUP
 # =================================================
 st.set_page_config(page_title="US Real Estate Price Outlook", layout="wide")
-
 st.title("🏡 US Real Estate Price Outlook Dashboard")
-st.write("Zillow + FRED + ML → Metro forecasts and state-level rankings")
+st.write("Zillow + FRED + ML → Forecasts, rankings, and explainability")
 st.markdown("---")
 
 
@@ -31,23 +31,15 @@ def friendly_label(p):
     return "🟡 Unclear"
 
 
-def regime_from_prob(p):
-    if p >= 0.65:
-        return "Bull"
-    elif p <= 0.45:
-        return "Risk"
-    return "Neutral"
-
-
 def deal_score(p):
     return int(np.clip(round(p * 100), 0, 100))
 
 
 def role_action(label, role):
     if role == "Buyer":
-        return "Safer time to buy" if "🟢" in label else "Wait or negotiate hard"
+        return "Safer time to buy" if "🟢" in label else "Wait or negotiate"
     if role == "Investor":
-        return "Deploy capital" if "🟢" in label else "Capital preservation"
+        return "Deploy capital" if "🟢" in label else "Preserve capital"
     return "Guide clients cautiously"
 
 
@@ -88,11 +80,10 @@ def load_fred(series_id):
 # FILE UPLOAD
 # =================================================
 st.subheader("📤 Upload Zillow Files")
-
-col1, col2 = st.columns(2)
-with col1:
+c1, c2 = st.columns(2)
+with c1:
     price_file = st.file_uploader("Weekly Median Sale Price CSV", type="csv")
-with col2:
+with c2:
     value_file = st.file_uploader("Monthly ZHVI CSV", type="csv")
 
 if not price_file or not value_file:
@@ -104,16 +95,10 @@ value_df = pd.read_csv(value_file)
 
 
 # =================================================
-# LOCATION SELECTION
+# LOCATION
 # =================================================
-st.subheader("🌍 Location Selection")
-
-metros = sorted(
-    set(price_df["RegionName"]).intersection(
-        set(value_df["RegionName"])
-    )
-)
-
+st.subheader("🌍 Location")
+metros = sorted(set(price_df["RegionName"]).intersection(set(value_df["RegionName"])))
 selected_metro = st.selectbox("Choose Metro", metros)
 user_role = st.selectbox("Client Type", ["Buyer", "Investor", "Agent"])
 run = st.button("✅ Run Forecast")
@@ -130,7 +115,6 @@ value = pd.DataFrame(value_df[value_df["RegionName"] == selected_metro].iloc[0, 
 
 price.index = pd.to_datetime(price.index)
 value.index = pd.to_datetime(value.index)
-
 price.columns = ["price"]
 value.columns = ["value"]
 
@@ -143,7 +127,7 @@ zillow.drop(columns="month", inplace=True)
 
 
 # =================================================
-# LOAD FRED DATA
+# LOAD FRED
 # =================================================
 interest = load_fred("MORTGAGE30US").rename(columns={"value": "interest"})
 cpi = load_fred("CPIAUCSL").rename(columns={"value": "cpi"})
@@ -179,6 +163,7 @@ horizons = {
 }
 
 results = []
+stored_models = {}
 
 for name, weeks in horizons.items():
     temp = data.copy()
@@ -189,6 +174,8 @@ for name, weeks in horizons.items():
     rf = RandomForestClassifier(min_samples_split=10, random_state=1)
     rf.fit(temp[predictors], temp["target"])
     prob = rf.predict_proba(temp[predictors].tail(1))[:, 1][0]
+
+    stored_models[name] = rf
 
     label = friendly_label(prob)
     action = role_action(label, user_role)
@@ -223,42 +210,96 @@ st.dataframe(out_df, use_container_width=True)
 
 
 # =================================================
-# METRO RANKING (CLEAN)
+# CHART 1: PRICE + REGIME
+# =================================================
+st.subheader("📈 Inflation-Adjusted Price Trend")
+
+fig1 = plt.figure(figsize=(14, 5))
+plt.plot(data.index, data["adj_price"], color="black", linewidth=2)
+
+plt.title(f"{selected_metro} – Real Home Price")
+plt.ylabel("Real Price (Adj)")
+plt.xlabel("Date")
+plt.tight_layout()
+st.pyplot(fig1)
+
+
+# =================================================
+# CHART 2: WEEKLY PROBABILITY (3M HORIZON)
+# =================================================
+st.subheader("📊 Weekly Price-Up Probability (3 Months)")
+
+weeks = 13
+temp = data.copy()
+temp["future"] = temp["adj_price"].shift(-weeks)
+temp["target"] = (temp["future"] > temp["adj_price"]).astype(int)
+temp.dropna(inplace=True)
+
+rf_weekly = RandomForestClassifier(min_samples_split=10, random_state=1)
+rf_weekly.fit(temp[predictors], temp["target"])
+probs = rf_weekly.predict_proba(temp[predictors])[:, 1]
+
+fig2, ax = plt.subplots(figsize=(14, 4))
+ax.plot(temp.index, probs, linewidth=2)
+ax.axhline(0.65, linestyle="--", alpha=0.6)
+ax.axhline(0.45, linestyle="--", alpha=0.6)
+ax.set_ylim(0, 1)
+ax.set_ylabel("Probability")
+ax.set_title("Weekly Price-Up Probability")
+st.pyplot(fig2)
+
+
+# =================================================
+# FEATURE IMPORTANCE
+# =================================================
+st.markdown("---")
+st.subheader("🧠 Feature Importance")
+
+chosen_horizon = st.selectbox("Choose horizon to explain", list(horizons.keys()), index=1)
+model = stored_models[chosen_horizon]
+
+fi = pd.DataFrame({
+    "Feature": predictors,
+    "Importance": model.feature_importances_
+}).sort_values("Importance", ascending=False)
+
+fig3, ax = plt.subplots(figsize=(10, 4))
+ax.bar(fi["Feature"], fi["Importance"])
+ax.set_title(f"Feature Importance – {chosen_horizon}")
+ax.set_ylabel("Importance")
+ax.tick_params(axis="x", rotation=45)
+plt.tight_layout()
+
+st.pyplot(fig3)
+st.dataframe(fi, use_container_width=True)
+
+
+# =================================================
+# METRO RANKING
 # =================================================
 st.markdown("---")
 st.subheader("🏆 Metro Ranking (Same State)")
 
-enable_ranking = st.checkbox("Enable Metro Ranking", value=True)
 rank_count = st.slider("Number of metros to rank", 5, 25, 10)
 
-if enable_ranking and "," in selected_metro:
+if "," in selected_metro:
     state = selected_metro.split(",")[-1].strip()
     state_metros = [m for m in metros if m.endswith(f", {state}")]
 
     rows = []
-
-    for metro in state_metros:
-        pm = price_df[price_df["RegionName"] == metro]
+    for m in state_metros:
+        pm = price_df[price_df["RegionName"] == m]
         if pm.empty:
             continue
-
         p = pd.DataFrame(pm.iloc[0, 5:])
         p.index = pd.to_datetime(p.index)
         p.columns = ["price"]
-
-        if len(p) < 30:
-            continue
 
         prob = proxy_up_probability(p["price"])
         if prob is None:
             continue
 
-        rows.append([
-            metro,
-            f"{prob*100:.0f}%",
-            friendly_label(prob),
-            deal_score(prob)
-        ])
+        rows.append([m, f"{prob*100:.0f}%", friendly_label(prob), deal_score(prob)])
 
     if rows:
         rank_df = pd.DataFrame(
@@ -268,7 +309,4 @@ if enable_ranking and "," in selected_metro:
 
         rank_df.index = np.arange(1, len(rank_df) + 1)
         rank_df.index.name = "Rank"
-
         st.dataframe(rank_df, use_container_width=True)
-    else:
-        st.info("Not enough data to rank metros.")
