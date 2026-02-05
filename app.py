@@ -806,6 +806,32 @@ if run_button:
         st.warning(f"✅ Weekly Outlook: {weekly_label}")
         st.write("This week is unclear. Prices could move up or down.")
 
+    # ----------------------------
+# 📈 Weekly Probability Chart
+# ----------------------------
+st.markdown("---")
+st.subheader("📈 Weekly Price Direction Probability")
+
+fig_w, ax_w = plt.subplots(figsize=(12, 4))
+
+ax_w.plot(
+    prob_data.index,
+    prob_data["prob_up"],
+    linewidth=2,
+    label="Weekly Up Probability"
+)
+
+ax_w.axhline(0.65, linestyle="--", color="green", alpha=0.6, label="Bull Threshold")
+ax_w.axhline(0.45, linestyle="--", color="red", alpha=0.6, label="Risk Threshold")
+
+ax_w.set_ylim(0, 1)
+ax_w.set_ylabel("Probability")
+ax_w.set_title("Weekly Probability of Price Increase")
+ax_w.legend()
+ax_w.grid(alpha=0.3)
+
+st.pyplot(fig_w)
+
     # Monthly Prediction
     st.subheader("📌 Monthly Prediction")
     latest_month_regime = monthly_signal["regime"].tail(1).values[0]
