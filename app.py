@@ -660,15 +660,15 @@ else:
     })
 
 
-        monthly = prob_data.copy()
-        monthly["month"] = monthly.index.to_period("M")
-        monthly_signal = monthly.groupby("month").agg({
-            "prob_up": "mean",
-            "regime": lambda x: x.value_counts().index[0]
-        })
+    monthly = prob_data.copy()
+    monthly["month"] = monthly.index.to_period("M")
+    monthly_signal = monthly.groupby("month").agg({
+    "prob_up": "mean",
+    "regime": lambda x: x.value_counts().index[0]
+    })
 
-        status.success("✅ Done! Forecast is ready.")
-        progress.progress(100)
+    status.success("✅ Done! Forecast is ready.")
+    progress.progress(100)
 
     # KPI Summary
     st.markdown("---")
