@@ -658,7 +658,7 @@ min_len = min(len(prob_data), len(probs3))
 prob_data = prob_data.iloc[:min_len]
 
 prob_data["prob_up"] = probs3[:min_len]
-        prob_data["regime"] = prob_data["prob_up"].apply(regime_from_prob)
+prob_data["regime"] = prob_data["prob_up"].apply(regime_from_prob)
 
         monthly = prob_data.copy()
         monthly["month"] = monthly.index.to_period("M")
