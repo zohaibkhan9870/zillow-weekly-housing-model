@@ -235,11 +235,15 @@ monthly_regime = prob_data.resample("M")["regime"].agg(lambda x: x.value_counts(
 # QUICK SUMMARY
 # =================================================
 # =================================================
-# 📌 MARKET SNAPSHOT (USER-FRIENDLY, SAFE VERSION)
+# 📌 MARKET SNAPSHOT (ABSOLUTE SAFE VERSION)
 # =================================================
 st.markdown("---")
 st.subheader(f"📌 Market Snapshot — {selected_metro}")
 
+# --- Always-safe latest probability
+latest_prob = float(prob_data["prob_up"].iloc[-1])
+
+# --- Confidence (simple, transparent)
 historical_accuracy = 0.52
 confidence_label = (
     "High" if historical_accuracy >= 0.60 else
@@ -247,39 +251,48 @@ confidence_label = (
     "Low"
 )
 
-market_outlook = weekly_label.replace("🟢 ", "").replace("🟡 ", "").replace("🔴 ", "")
+# --- Market outlook text
+market_outlook = (
+    "Risky" if latest_prob <= 0.45 else
+    "Favorable" if latest_prob >= 0.65 else
+    "Unclear"
+)
+
+# --- Suggested action (inline, no external vars)
+suggested_action = (
+    "Be careful — risk is elevated."
+    if latest_prob <= 0.45 else
+    "Conditions look supportive. This may be a reasonable time to move forward."
+    if latest_prob >= 0.65 else
+    "Market conditions are mixed. Staying flexible is recommended."
+)
 
 st.markdown(f"""
 **Market Outlook:** {market_outlook}  
 **Confidence:** {confidence_label} *(≈ {int(historical_accuracy*100)}% historical accuracy)*  
-**Suggested Action:** {
-    "Be careful — risk is elevated."
-    if latest_week_prob <= 0.45 else
-    "Conditions look supportive. This may be a reasonable time to move forward."
-    if latest_week_prob >= 0.65 else
-    "Market conditions are mixed. Staying flexible is recommended."
-}
+**Suggested Action:** {suggested_action}
 
 **Why this outlook:**
 """)
 
-if latest_week_prob <= 0.45:
+# --- Human explanation
+if latest_prob <= 0.45:
     reasons = [
-        "📉 Home prices have weakened in recent months",
+        "📉 Home prices have lost short-term momentum",
         "📈 Mortgage rates remain elevated",
-        "⚠️ Recent momentum suggests higher downside risk"
+        "⚠️ Downside risk is currently higher than upside"
     ]
-elif latest_week_prob >= 0.65:
+elif latest_prob >= 0.65:
     reasons = [
-        "📈 Prices show positive momentum",
+        "📈 Prices are showing positive momentum",
         "📉 Inflation pressure has eased",
         "✅ Market conditions appear supportive"
     ]
 else:
     reasons = [
-        "⚖️ Mixed price signals",
+        "⚖️ Price signals are mixed",
         "📊 Conflicting short-term trends",
-        "🔍 Market direction remains unclear"
+        "🔍 Market direction remains uncertain"
     ]
 
 for r in reasons:
