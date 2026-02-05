@@ -23,40 +23,33 @@ st.write("Upload Zillow files → select State & Metro → get price outlook for
 # ----------------------------
 # ✅ Reset Button
 # ----------------------------
-st.markdown("---")
-if st.button("🔄 Reset / Clear All"):
+st.sidebar.markdown("---")
+if st.sidebar.button("🔄 Reset / Clear All"):
     st.session_state.clear()
     st.rerun()
 
 
 # ----------------------------
-# ✅ Zillow CSV Setup (NO DEFAULT SELECTION)
+# Sidebar: Zillow Download Help + Uploads
 # ----------------------------
-st.subheader("📂 Zillow CSV Setup")
+st.sidebar.header("📂 Zillow CSV Setup")
 
-file_status = st.selectbox(
+file_status = st.sidebar.radio(
     "Do you already have the Zillow CSV files downloaded?",
-    ["Select an option...", "✅ Yes, I already have them", "⬇️ No, I need to download them"],
-    index=0
+    ["✅ Yes, I already have them", "⬇️ No, I need to download them"]
 )
 
-if file_status == "Select an option...":
-    st.info("✅ Please select an option to continue.")
-    st.stop()
-
-
-# ----------------------------
-# If user needs to download
-# ----------------------------
+# If user needs help downloading
 if file_status == "⬇️ No, I need to download them":
-    st.markdown("### ✅ Step 1: Open Zillow Research Page")
-    st.link_button("🌐 Open Zillow Data Page", "https://www.zillow.com/research/data/")
+    st.sidebar.markdown("### ✅ Step 1: Open Zillow Research Page")
+    st.sidebar.link_button("🌐 Open Zillow Data Page", "https://www.zillow.com/research/data/")
 
-    st.markdown("### ✅ Step 2: Download these 2 CSV files")
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### ✅ Step 2: Download these 2 CSV files")
 
-    st.markdown("#### 🏠 Home Values Section")
-    st.markdown("Download **ZHVI (Home Value Index)** CSV:")
-    st.markdown(
+    st.sidebar.markdown("#### 🏠 Home Values Section")
+    st.sidebar.markdown("Download **ZHVI (Home Value Index)** CSV:")
+    st.sidebar.markdown(
         """
         <div style="background-color:#111827; padding:12px; border-radius:10px; font-size:14px;">
             <b>Metro_zhvi_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv</b>
@@ -65,9 +58,9 @@ if file_status == "⬇️ No, I need to download them":
         unsafe_allow_html=True
     )
 
-    st.markdown("#### 💰 Sales Section")
-    st.markdown("Download **Median Sale Price (Weekly)** CSV:")
-    st.markdown(
+    st.sidebar.markdown("#### 💰 Sales Section")
+    st.sidebar.markdown("Download **Median Sale Price (Weekly)** CSV:")
+    st.sidebar.markdown(
         """
         <div style="background-color:#111827; padding:12px; border-radius:10px; font-size:14px;">
             <b>Metro_median_sale_price_uc_sfrcondo_sm_week.csv</b>
@@ -76,121 +69,58 @@ if file_status == "⬇️ No, I need to download them":
         unsafe_allow_html=True
     )
 
-    st.markdown("---")
-    confirm_download = st.checkbox("✅ I downloaded both Zillow CSV files")
-
-    if not confirm_download:
-        st.warning("✅ Please confirm you downloaded both files to unlock uploads.")
-        st.stop()
-
-# If user already has files (skip checkbox)
-if file_status == "✅ Yes, I already have them":
-    confirm_download = True
-
-
-# ----------------------------
-# ✅ File Validation
-# ----------------------------
-EXPECTED_PRICE_FILENAME = "Metro_median_sale_price_uc_sfrcondo_sm_week.csv"
-EXPECTED_VALUE_FILENAME = "Metro_zhvi_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv"
-
-
-def safe_median_date_diff_days(parsed_dates: pd.DatetimeIndex):
-    if parsed_dates is None or len(parsed_dates) < 2:
-        return None
-
-    sorted_dates = pd.Series(parsed_dates).sort_values().reset_index(drop=True)
-    diffs = sorted_dates.diff().dropna()
-
-    if diffs.empty:
-        return None
-
-    median_days = diffs.dt.total_seconds().median() / (60 * 60 * 24)
-    return median_days
-
-
-def validate_zillow_csv(uploaded_file, expected_type):
-    try:
-        df = pd.read_csv(uploaded_file)
-    except Exception:
-        return False, "❌ Could not read this CSV file.", None
-
-    if "RegionName" not in df.columns:
-        return False, "❌ Wrong file content: missing required column 'RegionName'.", None
-
-    if df.shape[1] < 10:
-        return False, "❌ Wrong file content: not enough columns (missing time series).", None
-
-    sample_regions = df["RegionName"].dropna().astype(str).head(30).tolist()
-    if not any("," in x for x in sample_regions):
-        return False, "❌ Wrong file content: RegionName does not look like metro format (City, ST).", None
-
-    date_cols = list(df.columns[5:])
-    parsed_dates = pd.to_datetime(date_cols, errors="coerce").dropna()
-
-    if len(parsed_dates) < 10:
-        return False, "❌ Wrong file content: could not detect enough valid date columns.", None
-
-    median_days = safe_median_date_diff_days(parsed_dates)
-
-    if median_days is None:
-        return False, "❌ Wrong file content: could not detect weekly/monthly frequency.", None
-
-    if expected_type == "weekly_price":
-        if median_days > 15:
-            return False, "❌ This does NOT look like the Weekly Sale Price file.", None
-
-    if expected_type == "monthly_value":
-        if median_days < 20:
-            return False, "❌ This does NOT look like the Monthly ZHVI file.", None
-
-    return True, "✅ Correct file uploaded.", df
-
-
-# ----------------------------
-# ✅ Upload Section
-# ----------------------------
-st.subheader("📤 Upload Zillow Files")
-
-price_file = st.file_uploader("Upload Weekly Median Sale Price CSV", type=["csv"])
-price_ok = False
-zillow_price = None
-
-if price_file is not None:
-    if price_file.name != EXPECTED_PRICE_FILENAME:
-        st.warning(f"⚠️ File name is different than expected.\nExpected: {EXPECTED_PRICE_FILENAME}")
-
-    ok, msg, df_temp = validate_zillow_csv(price_file, "weekly_price")
-    if ok:
-        st.success(msg)
-        price_ok = True
-        zillow_price = df_temp
-    else:
-        st.error(msg)
-
-value_file = st.file_uploader("Upload ZHVI Home Value Index CSV", type=["csv"])
-value_ok = False
-zillow_value = None
-
-if value_file is not None:
-    if value_file.name != EXPECTED_VALUE_FILENAME:
-        st.warning(f"⚠️ File name is different than expected.\nExpected: {EXPECTED_VALUE_FILENAME}")
-
-    ok, msg, df_temp = validate_zillow_csv(value_file, "monthly_value")
-    if ok:
-        st.success(msg)
-        value_ok = True
-        zillow_value = df_temp
-    else:
-        st.error(msg)
-
-if not (price_ok and value_ok):
-    st.info("✅ Upload both correct files to continue.")
+    st.sidebar.markdown("---")
+    st.sidebar.info("✅ After downloading both files, come back and select 'Yes' above.")
     st.stop()
 
 
 # ----------------------------
-# ✅ FRED API Loader
+# ✅ Checkbox confirmation before upload
+# ----------------------------
+st.sidebar.markdown("---")
+confirm_download = st.sidebar.checkbox("✅ I downloaded both Zillow CSV files")
+
+if not confirm_download:
+    st.info("✅ Please confirm you downloaded both Zillow CSV files to unlock uploads.")
+    st.stop()
+
+
+# ----------------------------
+# ✅ Upload Section (with Upload Status directly under it)
+# ----------------------------
+st.sidebar.header("📤 Upload Zillow Files")
+
+# Uploads
+price_file = st.sidebar.file_uploader(
+    "Upload Weekly Median Sale Price CSV",
+    type=["csv"]
+)
+
+value_file = st.sidebar.file_uploader(
+    "Upload ZHVI Home Value Index CSV",
+    type=["csv"]
+)
+
+# ✅ Upload Status RIGHT HERE (compact, no extra spacing)
+st.sidebar.markdown("### ✅ Upload Status")
+
+col1, col2 = st.sidebar.columns(2)
+
+with col1:
+    if price_file is not None:
+        st.success("Sale Price ✅")
+    else:
+        st.error("Sale Price ❌")
+
+with col2:
+    if value_file is not None:
+        st.success("ZHVI ✅")
+    else:
+        st.error("ZHVI ❌")
+
+
+# ----------------------------
+# ✅ FRED API Loader (JSON Method)
 # ----------------------------
 def load_fred_series(series_id):
     api_key = st.secrets["FRED_API_KEY"]
@@ -250,86 +180,144 @@ def regime_from_prob(p):
 
 
 # ----------------------------
-# ✅ Location selection
+# ✅ What does this forecast mean?
 # ----------------------------
-st.subheader("🌎 Select Location")
+st.markdown("---")
+with st.expander("ℹ️ What does this forecast mean? (Simple explanation)"):
+    st.write("✅ **Price Up Chance (%)** = chance home prices may rise.")
+    st.write("✅ **Price Down Chance (%)** = chance home prices may fall.")
+    st.write("✅ **Outlook** shows the simple signal:")
+    st.write("• 🟢 Good time = more chance of prices going up")
+    st.write("• 🟡 Unclear = mixed signals (could go up or down)")
+    st.write("• 🔴 Risky = higher downside risk")
 
-metro_list = sorted(
-    set(zillow_price["RegionName"].dropna().unique()).intersection(
-        set(zillow_value["RegionName"].dropna().unique())
+
+# ----------------------------
+# ✅ STEP 1: If files uploaded → show dropdowns FIRST
+# ----------------------------
+selected_metro = None
+selected_state = None
+
+if price_file and value_file:
+    zillow_price = pd.read_csv(price_file)
+    zillow_value = pd.read_csv(value_file)
+
+    if "RegionName" not in zillow_price.columns or "RegionName" not in zillow_value.columns:
+        st.error("❌ Your Zillow file is missing the 'RegionName' column.")
+        st.stop()
+
+    metro_list = sorted(
+        set(zillow_price["RegionName"].dropna().unique()).intersection(
+            set(zillow_value["RegionName"].dropna().unique())
+        )
     )
-)
 
-metro_search = st.text_input("🔍 Search metro (optional)", "").strip()
+    if len(metro_list) == 0:
+        st.error("❌ Could not find matching metros between both files.")
+        st.stop()
 
-states = sorted(list(set([m.split(",")[-1].strip() for m in metro_list if "," in m])))
+    st.sidebar.header("🌎 Select Location")
 
-auto_state = None
-auto_metro = None
-if metro_search:
-    matches = [m for m in metro_list if metro_search.lower() in m.lower()]
-    if len(matches) > 0:
-        auto_metro = matches[0]
-        auto_state = auto_metro.split(",")[-1].strip()
+    # ✅ Metro Search input
+    metro_search = st.sidebar.text_input("🔍 Search metro (optional)", "").strip()
 
-if auto_state in states:
-    default_state_index = states.index(auto_state)
+    # Build states list
+    states = sorted(list(set([m.split(",")[-1].strip() for m in metro_list if "," in m])))
+
+    # ✅ AUTO-DETECT STATE if user types a metro
+    auto_state = None
+    auto_metro = None
+    if metro_search:
+        matches = [m for m in metro_list if metro_search.lower() in m.lower()]
+        if len(matches) > 0:
+            auto_metro = matches[0]
+            auto_state = auto_metro.split(",")[-1].strip()
+
+    # Set default state index if auto_state found
+    if auto_state in states:
+        default_state_index = states.index(auto_state)
+    else:
+        default_state_index = 0
+
+    selected_state = st.sidebar.selectbox("Choose State", states, index=default_state_index)
+
+    # Filter metros by selected state
+    filtered_metros = [m for m in metro_list if m.endswith(f", {selected_state}")]
+
+    # Further filter metros by search input
+    if metro_search:
+        filtered_metros = [m for m in filtered_metros if metro_search.lower() in m.lower()]
+
+    if len(filtered_metros) == 0:
+        st.sidebar.warning("⚠️ No metros found. Try another search or change state.")
+        st.stop()
+
+    # Auto-select metro if found
+    if auto_metro in filtered_metros:
+        default_metro_index = filtered_metros.index(auto_metro)
+    else:
+        default_metro_index = 0
+
+    selected_metro = st.sidebar.selectbox("Choose Metro", filtered_metros, index=default_metro_index)
+
+    st.sidebar.markdown("---")
+    run_button = st.sidebar.button("✅ Run Forecast")
+
 else:
-    default_state_index = 0
-
-selected_state = st.selectbox("Choose State", states, index=default_state_index)
-
-filtered_metros = [m for m in metro_list if m.endswith(f", {selected_state}")]
-if metro_search:
-    filtered_metros = [m for m in filtered_metros if metro_search.lower() in m.lower()]
-
-if len(filtered_metros) == 0:
-    st.warning("⚠️ No metros found. Try another search or change state.")
+    st.info("⬅️ Upload both Zillow CSV files to continue.")
     st.stop()
 
-if auto_metro in filtered_metros:
-    default_metro_index = filtered_metros.index(auto_metro)
-else:
-    default_metro_index = 0
-
-selected_metro = st.selectbox("Choose Metro", filtered_metros, index=default_metro_index)
-
-run_button = st.button("✅ Run Forecast")
-
 
 # ----------------------------
-# ✅ Run Model + Show Results (FULL VERSION)
+# ✅ STEP 2: Only run model when button pressed
 # ----------------------------
 if run_button:
     with st.spinner(f"⏳ Processing... Running forecast for {selected_metro}"):
         progress = st.progress(0)
         status = st.empty()
 
+        # Step 1
         status.info("Step 1/5: Loading metro data...")
         progress.progress(10)
 
         price_matches = zillow_price[zillow_price["RegionName"] == selected_metro]
         value_matches = zillow_value[zillow_value["RegionName"] == selected_metro]
 
+        if price_matches.empty or value_matches.empty:
+            st.error("❌ Selected metro not found in both files.")
+            st.stop()
+
         price = pd.DataFrame(price_matches.iloc[0, 5:])
         value = pd.DataFrame(value_matches.iloc[0, 5:])
 
+        # Step 2
         status.info("Step 2/5: Fetching macro data from FRED...")
         progress.progress(30)
 
-        interest = load_fred_series("MORTGAGE30US").rename(columns={"value": "interest"})
-        vacancy = load_fred_series("RRVRUSQ156N").rename(columns={"value": "vacancy"})
-        cpi = load_fred_series("CPIAUCSL").rename(columns={"value": "cpi"})
+        try:
+            interest = load_fred_series("MORTGAGE30US").rename(columns={"value": "interest"})
+            vacancy = load_fred_series("RRVRUSQ156N").rename(columns={"value": "vacancy"})
+            cpi = load_fred_series("CPIAUCSL").rename(columns={"value": "cpi"})
 
-        unemployment = load_fred_series("UNRATE").rename(columns={"value": "unemployment"})
-        jobs = load_fred_series("PAYEMS").rename(columns={"value": "jobs"})
-        permits = load_fred_series("PERMIT").rename(columns={"value": "permits"})
-        stress = load_fred_series("STLFSI4").rename(columns={"value": "stress"})
+            unemployment = load_fred_series("UNRATE").rename(columns={"value": "unemployment"})
+            jobs = load_fred_series("PAYEMS").rename(columns={"value": "jobs"})
+            permits = load_fred_series("PERMIT").rename(columns={"value": "permits"})
+            stress = load_fred_series("STLFSI4").rename(columns={"value": "stress"})
 
-        fed_data = pd.concat([interest, vacancy, cpi, unemployment, jobs, permits, stress], axis=1)
-        fed_data = fed_data.sort_index().ffill().dropna()
-        fed_data.index = fed_data.index + timedelta(days=2)
+            fed_data = pd.concat(
+                [interest, vacancy, cpi, unemployment, jobs, permits, stress],
+                axis=1
+            )
 
+            fed_data = fed_data.sort_index().ffill().dropna()
+            fed_data.index = fed_data.index + timedelta(days=2)
+
+        except Exception as e:
+            st.error("❌ Failed to fetch FRED macro data using API.")
+            st.write("Error details:", str(e))
+            st.stop()
+
+        # Step 3
         status.info("Step 3/5: Preparing Zillow price/value data...")
         progress.progress(50)
 
@@ -346,6 +334,7 @@ if run_button:
 
         data = fed_data.merge(price_data, left_index=True, right_index=True)
 
+        # Step 4
         status.info("Step 4/5: Building features + training models...")
         progress.progress(70)
 
@@ -363,11 +352,20 @@ if run_button:
         data.dropna(inplace=True)
 
         predictors = [
-            "adj_price", "adj_value", "interest", "vacancy",
-            "price_13w_change", "value_52w_change",
-            "unemployment", "jobs", "permits", "stress",
-            "unemployment_13w_change", "jobs_13w_change",
-            "permits_13w_change", "stress_13w_change"
+            "adj_price",
+            "adj_value",
+            "interest",
+            "vacancy",
+            "price_13w_change",
+            "value_52w_change",
+            "unemployment",
+            "jobs",
+            "permits",
+            "stress",
+            "unemployment_13w_change",
+            "jobs_13w_change",
+            "permits_13w_change",
+            "stress_13w_change"
         ]
 
         START = 104
@@ -382,6 +380,7 @@ if run_button:
         }
 
         results = []
+
         for horizon_name, weeks_ahead in horizons.items():
             temp = data.copy()
             temp["future_price"] = temp["adj_price"].shift(-weeks_ahead)
@@ -408,6 +407,7 @@ if run_button:
             probs = np.concatenate(all_probs)
             pred_df = temp.iloc[START:].copy()
             pred_df["prob_up"] = probs
+
             latest_prob = float(pred_df["prob_up"].tail(1).values[0])
 
             up_pct = round(latest_prob * 100, 0)
@@ -418,11 +418,12 @@ if run_button:
 
             results.append([horizon_name, f"{int(up_pct)}%", f"{int(down_pct)}%", label, action])
 
-        out_df = pd.DataFrame(results, columns=[
-            "Time Horizon", "Price Up Chance (%)", "Price Down Chance (%)", "Outlook", "Suggested Action"
-        ])
+        out_df = pd.DataFrame(
+            results,
+            columns=["Time Horizon", "Price Up Chance (%)", "Price Down Chance (%)", "Outlook", "Suggested Action"]
+        )
 
-        # Weekly + Monthly signals (3 month horizon)
+        # Step 5
         status.info("Step 5/5: Creating charts + weekly summary...")
         progress.progress(90)
 
@@ -432,43 +433,45 @@ if run_button:
         temp3["target"] = (temp3["future_price"] > temp3["adj_price"]).astype(int)
         temp3.dropna(inplace=True)
 
-        def predict_proba_3(train, test):
-            rf = RandomForestClassifier(min_samples_split=10, random_state=1)
-            rf.fit(train[predictors], train["target"])
-            return rf.predict_proba(test[predictors])[:, 1]
+        if temp3.shape[0] <= START:
+            prob_data = None
+            monthly_signal = None
+        else:
+            def predict_proba_3(train, test):
+                rf = RandomForestClassifier(min_samples_split=10, random_state=1)
+                rf.fit(train[predictors], train["target"])
+                return rf.predict_proba(test[predictors])[:, 1]
 
-        all_probs_3 = []
-        for i in range(START, temp3.shape[0], STEP):
-            train = temp3.iloc[:i]
-            test = temp3.iloc[i:i + STEP]
-            if len(test) == 0:
-                continue
-            all_probs_3.append(predict_proba_3(train, test))
+            all_probs_3 = []
+            for i in range(START, temp3.shape[0], STEP):
+                train = temp3.iloc[:i]
+                test = temp3.iloc[i:i + STEP]
+                if len(test) == 0:
+                    continue
+                all_probs_3.append(predict_proba_3(train, test))
 
-        probs3 = np.concatenate(all_probs_3)
+            probs3 = np.concatenate(all_probs_3)
 
-        prob_data = temp3.iloc[START:].copy()
-        prob_data["prob_up"] = probs3
-        prob_data["regime"] = prob_data["prob_up"].apply(regime_from_prob)
+            prob_data = temp3.iloc[START:].copy()
+            prob_data["prob_up"] = probs3
+            prob_data["regime"] = prob_data["prob_up"].apply(regime_from_prob)
 
-        monthly = prob_data.copy()
-        monthly["month"] = monthly.index.to_period("M")
-        monthly_signal = monthly.groupby("month").agg({
-            "prob_up": "mean",
-            "regime": lambda x: x.value_counts().index[0]
-        })
+            monthly = prob_data.copy()
+            monthly["month"] = monthly.index.to_period("M")
+
+            monthly_signal = (
+                monthly.groupby("month")
+                .agg({
+                    "prob_up": "mean",
+                    "regime": lambda x: x.value_counts().index[0]
+                })
+            )
 
         status.success("✅ Done! Forecast is ready.")
         progress.progress(100)
 
-    with st.expander("ℹ️ What does this forecast mean? (Simple explanation)"):
-        st.write("✅ **Price Up Chance (%)** = chance home prices may rise.")
-        st.write("✅ **Price Down Chance (%)** = chance home prices may fall.")
-        st.write("✅ **Outlook** shows the simple signal:")
-        st.write("• 🟢 Good time = more chance of prices going up")
-        st.write("• 🟡 Unclear = mixed signals (could go up or down)")
-        st.write("• 🔴 Risky = higher downside risk")
-
+    # OUTPUT
+    st.success("✅ Done! Forecast is ready.")
     st.subheader("✅ Forecast Results (All Time Horizons)")
     st.dataframe(out_df, use_container_width=True)
 
@@ -480,8 +483,13 @@ if run_button:
         mime="text/csv"
     )
 
-    # Weekly message
+    if prob_data is None or monthly_signal is None:
+        st.warning("Not enough data to build weekly graph and monthly trend yet.")
+        st.stop()
+
+    # Weekly Prediction
     st.subheader("📌 Weekly Prediction")
+
     latest_week_prob = float(prob_data["prob_up"].tail(1).values[0])
     weekly_label = friendly_label(latest_week_prob)
     weekly_action = simple_action(weekly_label)
@@ -496,8 +504,9 @@ if run_button:
         st.warning(f"✅ Weekly Outlook: {weekly_label}")
         st.write("This week is unclear. Prices could move up or down.")
 
-    # Monthly message
+    # Monthly Prediction
     st.subheader("📌 Monthly Prediction")
+
     latest_month_regime = monthly_signal["regime"].tail(1).values[0]
 
     if latest_month_regime == "Bull":
@@ -516,9 +525,16 @@ if run_button:
 
     # Chart 1
     st.subheader("📈 Price Trend + Risk Background (3-Month Outlook)")
+
     fig1 = plt.figure(figsize=(14, 6))
 
-    plt.plot(prob_data.index, prob_data["adj_price"], color="black", linewidth=2)
+    plt.plot(
+        prob_data.index,
+        prob_data["adj_price"],
+        color="black",
+        linewidth=2,
+        label="Real Home Price (Inflation-Adjusted)"
+    )
 
     for i in range(len(prob_data) - 1):
         regime = prob_data["regime"].iloc[i]
@@ -528,6 +544,7 @@ if run_button:
             color = "gold"
         else:
             color = "red"
+
         plt.axvspan(prob_data.index[i], prob_data.index[i + 1], color=color, alpha=0.12)
 
     plt.title(f"{selected_metro} Housing Price Trend (With Risk Zones)", fontsize=14, weight="bold")
@@ -539,17 +556,30 @@ if run_button:
         Patch(facecolor="gold", alpha=0.25, label="Unclear"),
         Patch(facecolor="red", alpha=0.25, label="Risky"),
     ]
-    plt.legend(handles=legend_elements, loc="upper left")
+
+    plt.legend(
+        handles=[plt.Line2D([0], [0], color="black", lw=2, label="Real Price")] + legend_elements,
+        loc="upper left"
+    )
 
     plt.tight_layout()
     st.pyplot(fig1)
 
     # Chart 2
     st.subheader("📊 Weekly Outlook (Last 12 Weeks)")
+
     recent = prob_data.tail(12)
 
     fig2, ax = plt.subplots(figsize=(12, 7))
-    ax.plot(recent.index, recent["prob_up"], marker="o", linewidth=2.5, color="black")
+
+    ax.plot(
+        recent.index,
+        recent["prob_up"],
+        marker="o",
+        linewidth=2.5,
+        color="black"
+    )
+
     ax.axhline(0.65, color="green", linestyle="--", alpha=0.6)
     ax.axhline(0.45, color="red", linestyle="--", alpha=0.6)
 
@@ -567,7 +597,15 @@ if run_button:
         "• X-axis = Weeks (time) | Y-axis = Score from 0 to 1."
     )
 
-    fig2.text(0.5, 0.01, explanation_text, ha="center", va="bottom", fontsize=10)
+    fig2.text(
+        0.5,
+        0.01,
+        explanation_text,
+        ha="center",
+        va="bottom",
+        fontsize=10
+    )
+
     plt.tight_layout(rect=[0, 0.12, 1, 1])
     st.pyplot(fig2)
 
