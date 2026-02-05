@@ -836,13 +836,13 @@ st.pyplot(fig_w)
 st.subheader("📌 Monthly Prediction")
 latest_month_regime = monthly_signal["regime"].tail(1).values[0]
 
-    if latest_month_regime == "Bull":
+if latest_month_regime == "Bull":
         st.info("ℹ️ Monthly Trend: 🟢 Growing trend")
         st.write("The bigger monthly trend looks positive.")
-    elif latest_month_regime == "Risk":
+elif latest_month_regime == "Risk":
         st.info("ℹ️ Monthly Trend: 🔴 Weak trend")
         st.write("The bigger monthly trend looks weak or risky.")
-    else:
+else:
         st.info("ℹ️ Monthly Trend: 🟡 Still unclear")
         st.write("The bigger monthly trend is still unclear.")
         # ----------------------------
