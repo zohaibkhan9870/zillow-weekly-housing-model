@@ -627,7 +627,7 @@ if run_button:
             rf.fit(train[predictors], train["target"])
             return rf.predict_proba(test[predictors])[:, 1]
 
-    all_probs_3 = []
+     all_probs_3 = []
 for i in range(START, temp3.shape[0], STEP):
     train = temp3.iloc[:i]
     test = temp3.iloc[i:i + STEP]
@@ -646,6 +646,13 @@ else:
     prob_data["prob_up"] = probs3
     prob_data["regime"] = prob_data["prob_up"].apply(regime_from_prob)
 
+# ✅ IMPORTANT: this must be OUTSIDE the if/else
+monthly = prob_data.copy()
+monthly["month"] = monthly.index.to_period("M")
+monthly_signal = monthly.groupby("month").agg({
+    "prob_up": "mean",
+    "regime": lambda x: x.value_counts().index[0]
+})
 
         monthly = prob_data.copy()
         monthly["month"] = monthly.index.to_period("M")
