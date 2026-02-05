@@ -666,8 +666,8 @@ else:
     "regime": lambda x: x.value_counts().index[0]
     })
 
-        status.success("✅ Done! Forecast is ready.")
-        progress.progress(100)
+    status.success("✅ Done! Forecast is ready.")
+    progress.progress(100)
 
     # KPI Summary
     st.markdown("---")
