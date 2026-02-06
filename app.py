@@ -69,12 +69,29 @@ def proxy_up_probability(price_series):
 
 def simple_reasons(row, prob):
     reasons = []
-    reasons.append("📉 Prices below long-term trend" if row["trend_diff"] < 0 else "📈 Prices above long-term trend")
-    reasons.append("↘️ Momentum slowing" if row["p13"] < 0 else "↗️ Momentum improving")
-    reasons.append("🏘️ Inventory rising" if row["vacancy_trend"] > 0 else "🏠 Inventory remains tight")
-    reasons.append("⚠️ Model shows mixed or risky conditions" if prob <= 0.45
-                   else "✅ Model signals supportive conditions" if prob >= 0.65
-                   else "🤔 Model shows mixed signals")
+
+    if row["trend_diff"] < 0:
+        reasons.append("📉 Home prices are below their usual level, which shows weakness in the market")
+    else:
+        reasons.append("📈 Home prices are holding above their usual level, showing market strength")
+
+    if row["p13"] < 0:
+        reasons.append("↘️ Prices have been slowing recently instead of rising")
+    else:
+        reasons.append("↗️ Prices are still moving upward")
+
+    if row["vacancy_trend"] > 0:
+        reasons.append("🏘️ More homes are coming onto the market, giving buyers more choice")
+    else:
+        reasons.append("🏠 Fewer homes are available, which supports prices")
+
+    if prob <= 0.45:
+        reasons.append("⚠️ Overall, the market looks risky right now")
+    elif prob >= 0.65:
+        reasons.append("✅ Overall, market conditions look supportive")
+    else:
+        reasons.append("🤔 Overall, the market is mixed and uncertain")
+
     return reasons
 
 # =================================================
