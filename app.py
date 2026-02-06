@@ -22,10 +22,10 @@ st.write("Zillow + FRED + ML → Texas metro housing market signals")
 # =================================================
 st.info(
     "### How to use this dashboard\n"
-    "- Avoid buying during **risky market regimes**\n"
-    "- Compare **Texas metros by relative strength**\n"
-    "- Time **capital deployment**, not individual deals\n\n"
-    "This tool focuses on **market conditions and risk**, not exact price predictions."
+    "- **Avoid buying when risk is high** and prices are likely to struggle\n"
+    "- **Compare Texas cities** to see which markets look stronger or weaker right now\n"
+    "- **Decide when to act** — buy, wait, or negotiate — based on market conditions\n\n"
+    "This tool helps you understand **market risk and timing**, not exact future prices."
 )
 
 st.markdown("---")
