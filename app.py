@@ -18,7 +18,7 @@ st.title("🏡 Texas Real Estate Price Outlook Dashboard")
 st.write("Zillow + FRED + ML → Texas metro housing market signals")
 
 # =================================================
-# HOW TO USE (NEW – INVESTOR FRIENDLY)
+# HOW TO USE (INVESTOR FRIENDLY)
 # =================================================
 st.info(
     "### How investors use this dashboard\n"
@@ -113,7 +113,7 @@ price_df = pd.read_csv(price_file)
 value_df = pd.read_csv(value_file)
 
 # =================================================
-# TEXAS METROS ONLY
+# TEXAS METROS
 # =================================================
 tx_metros = sorted([
     m for m in price_df["RegionName"].unique()
@@ -197,7 +197,6 @@ latest_prob = float(temp["prob_up"].iloc[-1])
 latest_row = temp.iloc[-1]
 
 weekly_label = friendly_label(latest_prob)
-monthly_regime = temp.resample("M")["regime"].agg(lambda x: x.value_counts().index[0]).iloc[-1]
 
 # =================================================
 # MARKET SNAPSHOT
@@ -214,17 +213,7 @@ for r in simple_reasons(latest_row, latest_prob):
     st.write(f"- {r}")
 
 # =================================================
-# WEEKLY + MONTHLY PREDICTIONS
-# =================================================
-st.markdown("---")
-st.subheader("📌 Weekly Prediction")
-st.info(f"Weekly Outlook: {weekly_label}")
-
-st.subheader("📌 Monthly Prediction")
-st.info(f"Monthly Trend: {monthly_regime}")
-
-# =================================================
-# FORWARD-LOOKING REGIME (NEW – NO DATES)
+# FORWARD-LOOKING REGIME (T+1 / T+2 / T+3)
 # =================================================
 st.markdown("---")
 st.subheader("📅 Forward-Looking Market Regime (Next Phases)")
@@ -235,7 +224,7 @@ st.write(f"- **T+2:** {weekly_label}")
 st.write(f"- **T+3:** {weekly_label}")
 
 # =================================================
-# METRO COMPARISON — TOP 3 (UNCHANGED)
+# METRO COMPARISON — TOP 3
 # =================================================
 st.markdown("---")
 st.subheader("🏙️ Texas Metro Comparison — Top 3")
@@ -256,7 +245,7 @@ if rows:
     st.dataframe(comp_df.sort_values("Price Up Chance", ascending=False).head(3), use_container_width=True)
 
 # =================================================
-# ALL TEXAS METROS RANKING (NEW)
+# ALL TEXAS METROS RANKING
 # =================================================
 st.markdown("---")
 st.subheader("🏙️ Texas Metro Rankings (All Metros)")
