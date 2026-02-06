@@ -233,12 +233,15 @@ for r in simple_reasons(latest_row, latest_prob):
 # FORWARD-LOOKING REGIME (T+1 / T+2 / T+3)
 # =================================================
 st.markdown("---")
-st.subheader("📅 Forward-Looking Market Regime (Next Phases)")
-st.caption("Based on the **latest confirmed data**. This reflects likely market conditions, not exact future prices.")
+st.subheader("🗓️ What the Market Looks Like Next")
+st.caption(
+    "This shows the **likely market direction** based on the most recent data. "
+    "It helps with timing decisions, not exact price predictions."
+)
 
-st.write(f"- **T+1 (next phase):** {weekly_label}")
-st.write(f"- **T+2:** {weekly_label}")
-st.write(f"- **T+3:** {weekly_label}")
+st.write(f"- **Coming period:** {weekly_label}")
+st.write(f"- **Following period:** {weekly_label}")
+st.write(f"- **After that:** {weekly_label}")
 
 # =================================================
 # METRO COMPARISON — TOP 3
