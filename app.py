@@ -13,19 +13,19 @@ import matplotlib.pyplot as plt
 # =================================================
 # PAGE SETUP
 # =================================================
-st.set_page_config(page_title="Texas Real Estate Outlook", layout="wide")
+st.set_page_config(page_title="Texas Real Estate Price Outlook", layout="wide")
 st.title("🏡 Texas Real Estate Price Outlook Dashboard")
-st.write("Zillow + FRED + ML → Texas metro market regime signals")
+st.write("Zillow + FRED + ML → Texas metro housing market signals")
 
 # =================================================
-# HOW TO USE (NEW)
+# HOW TO USE (NEW – INVESTOR FRIENDLY)
 # =================================================
 st.info(
-    "### How investors use this dashboard:\n"
+    "### How investors use this dashboard\n"
     "- Avoid buying during **risky market regimes**\n"
     "- Compare **Texas metros by relative strength**\n"
     "- Time **capital deployment**, not individual deals\n\n"
-    "This tool focuses on **market conditions**, not exact price predictions."
+    "This tool focuses on **market conditions and risk**, not exact price predictions."
 )
 
 st.markdown("---")
@@ -44,16 +44,21 @@ def regime_from_prob(p):
     return "Unclear"
 
 def confidence_badge(n_obs):
-    if n_obs >= 300: return "High"
-    elif n_obs >= 180: return "Medium"
-    return "Low"
+    if n_obs >= 300: return "🟢 High"
+    elif n_obs >= 180: return "🟡 Medium"
+    return "🔴 Low"
 
-def suggested_action(prob):
+def suggested_action(prob, trend_diff, vol, vacancy_trend):
     if prob >= 0.65:
-        return "Conditions look supportive. Buying can make sense if pricing is fair."
+        return "Market has strength. Buying can make sense if value is fair."
     elif prob <= 0.45:
         return "Risk is elevated. Consider waiting or negotiating harder."
-    return "Mixed signals. Take your time and compare options."
+    return "Balanced market. Compare options carefully."
+
+def action_for_table(prob):
+    if prob >= 0.65: return "Favorable — consider buying"
+    elif prob <= 0.45: return "Risky — be cautious"
+    return "Mixed — take your time"
 
 def proxy_up_probability(price_series):
     pct = price_series.pct_change(13).dropna()
@@ -61,6 +66,16 @@ def proxy_up_probability(price_series):
     raw = float(pct.tail(1).values[0])
     prob = 0.50 + np.clip(raw, -0.10, 0.10) * 2.0
     return float(np.clip(prob, 0.05, 0.95))
+
+def simple_reasons(row, prob):
+    reasons = []
+    reasons.append("📉 Prices below long-term trend" if row["trend_diff"] < 0 else "📈 Prices above long-term trend")
+    reasons.append("↘️ Momentum slowing" if row["p13"] < 0 else "↗️ Momentum improving")
+    reasons.append("🏘️ Inventory rising" if row["vacancy_trend"] > 0 else "🏠 Inventory remains tight")
+    reasons.append("⚠️ Model shows mixed or risky conditions" if prob <= 0.45
+                   else "✅ Model signals supportive conditions" if prob >= 0.65
+                   else "🤔 Model shows mixed signals")
+    return reasons
 
 # =================================================
 # FRED LOADER
@@ -84,8 +99,8 @@ def load_fred(series_id):
 # FILE UPLOAD
 # =================================================
 st.subheader("📤 Upload Zillow Files")
-
 c1, c2 = st.columns(2)
+
 with c1:
     price_file = st.file_uploader("Weekly Median Sale Price CSV", type="csv")
 with c2:
@@ -98,7 +113,7 @@ price_df = pd.read_csv(price_file)
 value_df = pd.read_csv(value_file)
 
 # =================================================
-# TEXAS METROS
+# TEXAS METROS ONLY
 # =================================================
 tx_metros = sorted([
     m for m in price_df["RegionName"].unique()
@@ -129,7 +144,7 @@ zillow.index = price.index
 zillow.drop(columns="month", inplace=True)
 
 # =================================================
-# LOAD MACRO
+# LOAD MACRO DATA
 # =================================================
 interest = load_fred("MORTGAGE30US").rename(columns={"value": "interest"})
 cpi = load_fred("CPIAUCSL").rename(columns={"value": "cpi"})
@@ -147,15 +162,17 @@ data["adj_price"] = data["price"] / data["cpi"] * 100
 data["p13"] = data["adj_price"].pct_change(13)
 data["trend"] = data["adj_price"].rolling(52).mean()
 data["trend_diff"] = data["adj_price"] - data["trend"]
+data["vol"] = data["p13"].rolling(26).std()
 data["vacancy_trend"] = data["vacancy"].diff(13)
+
 data.dropna(inplace=True)
 
 if len(data) < 150:
-    st.warning("⚠️ Not enough reliable history for this metro.")
+    st.warning("⚠️ Not enough reliable historical data for this metro.")
     st.stop()
 
 # =================================================
-# MODEL
+# MODEL + BACKTEST
 # =================================================
 predictors = ["adj_price", "interest", "vacancy", "p13"]
 
@@ -174,35 +191,54 @@ acc = accuracy_score(test["target"], rf.predict(test[predictors]))
 confidence_pct = int(round(acc * 100))
 
 temp["prob_up"] = rf.predict_proba(temp[predictors])[:, 1]
-latest = temp.iloc[-1]
+temp["regime"] = temp["prob_up"].apply(regime_from_prob)
+
+latest_prob = float(temp["prob_up"].iloc[-1])
+latest_row = temp.iloc[-1]
+
+weekly_label = friendly_label(latest_prob)
+monthly_regime = temp.resample("M")["regime"].agg(lambda x: x.value_counts().index[0]).iloc[-1]
 
 # =================================================
-# SNAPSHOT
+# MARKET SNAPSHOT
 # =================================================
 st.markdown("---")
 st.markdown(f"## 📌 Market Snapshot — {selected_metro}")
-st.write(f"**Market Outlook:** {friendly_label(latest['prob_up'])}")
-st.write(f"**Model Confidence:** {confidence_badge(len(temp))}")
+st.write(f"**Market Outlook:** {weekly_label}")
 st.write(f"**Backtested Accuracy:** ~{confidence_pct}%")
-st.write(f"**Suggested Action:** {suggested_action(latest['prob_up'])}")
+st.write(f"**Data Confidence:** {confidence_badge(len(temp))}")
+st.write(f"**Suggested Action:** {suggested_action(latest_prob, latest_row['trend_diff'], latest_row['vol'], latest_row['vacancy_trend'])}")
+
+st.markdown("### Why this outlook:")
+for r in simple_reasons(latest_row, latest_prob):
+    st.write(f"- {r}")
 
 # =================================================
-# FORWARD-LOOKING REGIME (NEW)
+# WEEKLY + MONTHLY PREDICTIONS
 # =================================================
 st.markdown("---")
-st.subheader("📅 Forward-Looking Market Regime (Based on Latest Confirmed Data)")
-st.caption("This shows the likely **market phase**, not exact future prices.")
+st.subheader("📌 Weekly Prediction")
+st.info(f"Weekly Outlook: {weekly_label}")
 
-outlook = friendly_label(latest["prob_up"])
-st.write(f"- **T+1 (next phase):** {outlook}")
-st.write(f"- **T+2:** {outlook}")
-st.write(f"- **T+3:** {outlook}")
+st.subheader("📌 Monthly Prediction")
+st.info(f"Monthly Trend: {monthly_regime}")
 
 # =================================================
-# ALL TEXAS METROS RANKING (NEW)
+# FORWARD-LOOKING REGIME (NEW – NO DATES)
 # =================================================
 st.markdown("---")
-st.subheader("🏙️ Texas Metro Rankings (All Metros)")
+st.subheader("📅 Forward-Looking Market Regime (Next Phases)")
+st.caption("Based on the **latest confirmed data**. This reflects likely market conditions, not exact future prices.")
+
+st.write(f"- **T+1 (next phase):** {weekly_label}")
+st.write(f"- **T+2:** {weekly_label}")
+st.write(f"- **T+3:** {weekly_label}")
+
+# =================================================
+# METRO COMPARISON — TOP 3 (UNCHANGED)
+# =================================================
+st.markdown("---")
+st.subheader("🏙️ Texas Metro Comparison — Top 3")
 
 rows = []
 for m in tx_metros:
@@ -213,16 +249,60 @@ for m in tx_metros:
     p.columns = ["price"]
     prob = proxy_up_probability(p["price"])
     if prob is None: continue
-    rows.append([
-        m,
-        friendly_label(prob),
-        "Uptrend" if prob >= 0.55 else "Down / Sideways",
-        confidence_badge(len(p.dropna()))
-    ])
+    rows.append([m, f"{prob*100:.0f}%", friendly_label(prob), action_for_table(prob)])
 
-rank_df = pd.DataFrame(
-    rows,
-    columns=["Metro", "Outlook", "Trend Direction", "Confidence"]
-)
+if rows:
+    comp_df = pd.DataFrame(rows, columns=["Metro", "Price Up Chance", "Outlook", "What to Do"])
+    st.dataframe(comp_df.sort_values("Price Up Chance", ascending=False).head(3), use_container_width=True)
 
+# =================================================
+# ALL TEXAS METROS RANKING (NEW)
+# =================================================
+st.markdown("---")
+st.subheader("🏙️ Texas Metro Rankings (All Metros)")
+
+rank_rows = []
+for m in tx_metros:
+    pm = price_df[price_df["RegionName"] == m]
+    if pm.empty: continue
+    p = pd.DataFrame(pm.iloc[0, 5:])
+    p.index = pd.to_datetime(p.index)
+    p.columns = ["price"]
+    prob = proxy_up_probability(p["price"])
+    if prob is None: continue
+    trend = "Uptrend" if prob >= 0.55 else "Down / Sideways"
+    rank_rows.append([m, friendly_label(prob), trend, confidence_badge(len(p.dropna()))])
+
+rank_df = pd.DataFrame(rank_rows, columns=["Metro", "Outlook", "Trend Direction", "Confidence"])
 st.dataframe(rank_df, use_container_width=True)
+
+# =================================================
+# HISTORICAL PRICE TREND & RISK REGIMES
+# =================================================
+st.markdown("---")
+st.subheader("📈 Historical Price Trend & Risk Regimes")
+
+fig = plt.figure(figsize=(14,6))
+plt.plot(temp.index, temp["adj_price"], color="black", linewidth=2)
+
+for i in range(len(temp)-1):
+    color = "green" if temp["regime"].iloc[i] == "Supportive" else "red"
+    plt.axvspan(temp.index[i], temp.index[i+1], color=color, alpha=0.15)
+
+st.pyplot(fig)
+
+# =================================================
+# WEEKLY OUTLOOK CHART
+# =================================================
+st.markdown("---")
+st.subheader("📊 Weekly Outlook (Last 12 Weeks)")
+
+recent = temp.tail(12)
+fig2, ax = plt.subplots(figsize=(12,5))
+ax.plot(recent.index, recent["prob_up"], marker="o", linewidth=2, color="black")
+ax.axhline(0.65, linestyle="--", color="green", alpha=0.6)
+ax.axhline(0.45, linestyle="--", color="red", alpha=0.6)
+ax.set_ylim(0,1)
+
+st.pyplot(fig2)
+st.caption("Above 0.65 = supportive • Below 0.45 = risky")
