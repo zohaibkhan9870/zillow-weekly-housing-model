@@ -21,7 +21,7 @@ st.write("Zillow + FRED + ML → Texas metro housing market signals")
 # HOW TO USE (INVESTOR FRIENDLY)
 # =================================================
 st.info(
-    "### How investors use this dashboard\n"
+    "### How to use this dashboard\n"
     "- Avoid buying during **risky market regimes**\n"
     "- Compare **Texas metros by relative strength**\n"
     "- Time **capital deployment**, not individual deals\n\n"
