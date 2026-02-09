@@ -34,9 +34,12 @@ st.markdown("---")
 # HELPERS
 # =================================================
 def friendly_label(p):
-    if p >= 0.65: return "🟢 Supportive"
-    elif p <= 0.45: return "🔴 Risky"
+    if p >= 0.65: 
+        return "🟢 Supportive"
+    elif p <= 0.45: 
+        return "🔴 Risky"
     return "🟡 Unclear"
+
 
 def market_situation(score):
     if score < 0.45:
@@ -45,6 +48,7 @@ def market_situation(score):
         return "Balanced"
     return "Supportive"
 
+
 def market_effect(score):
     if score < 0.45:
         return "Against prices"
@@ -52,15 +56,22 @@ def market_effect(score):
         return "Neither helping nor hurting"
     return "Helping prices"
 
+
 def regime_from_prob(p):
-    if p >= 0.65: return "Supportive"
-    elif p <= 0.45: return "Risky"
+    if p >= 0.65: 
+        return "Supportive"
+    elif p <= 0.45: 
+        return "Risky"
     return "Unclear"
 
+
 def confidence_badge(n_obs):
-    if n_obs >= 300: return "🟢 High"
-    elif n_obs >= 180: return "🟡 Medium"
+    if n_obs >= 300: 
+        return "🟢 High"
+    elif n_obs >= 180: 
+        return "🟡 Medium"
     return "🔴 Low"
+
 
 def suggested_action(prob, trend_diff, vol, vacancy_trend):
     if prob >= 0.65:
@@ -69,30 +80,50 @@ def suggested_action(prob, trend_diff, vol, vacancy_trend):
         return "Risk is elevated. Consider waiting or negotiating harder."
     return "Balanced market. Compare options carefully."
 
+
 def action_for_table(prob):
-    if prob >= 0.65: return "Favorable — consider buying"
-    elif prob <= 0.45: return "Risky — be cautious"
+    if prob >= 0.65: 
+        return "Favorable — consider buying"
+    elif prob <= 0.45: 
+        return "Risky — be cautious"
     return "Mixed — take your time"
+
 
 def proxy_up_probability(price_series):
     pct = price_series.pct_change(13).dropna()
-    if pct.empty: return None
+    if pct.empty: 
+        return None
     raw = float(pct.tail(1).values[0])
     prob = 0.50 + np.clip(raw, -0.10, 0.10) * 2.0
     return float(np.clip(prob, 0.05, 0.95))
 
+
 def simple_reasons(row, prob):
     reasons = []
-    reasons.append("📉 Prices are below normal levels" if row["trend_diff"] < 0 else "📈 Prices are holding above normal levels")
-    reasons.append("↘️ Prices have been slowing recently" if row["p13"] < 0 else "↗️ Prices are still moving upward")
-    reasons.append("🏘️ More homes are coming onto the market" if row["vacancy_trend"] > 0 else "🏠 Limited supply is supporting prices")
+    reasons.append(
+        "📉 Prices are below normal levels" 
+        if row["trend_diff"] < 0 
+        else "📈 Prices are holding above normal levels"
+    )
+    reasons.append(
+        "↘️ Prices have been slowing recently" 
+        if row["p13"] < 0 
+        else "↗️ Prices are still moving upward"
+    )
+    reasons.append(
+        "🏘️ More homes are coming onto the market" 
+        if row["vacancy_trend"] > 0 
+        else "🏠 Limited supply is supporting prices"
+    )
     return reasons
+
 
 def price_direction(p13):
     if p13 > 0:
         return "Rising", "Helps prices"
     else:
         return "Falling", "Pushes prices down"
+
 
 def rate_level(rate):
     if rate > 6.5:
@@ -101,17 +132,29 @@ def rate_level(rate):
         return "Low", "Helps prices"
     return "Normal", "Neutral effect"
 
+
 def supply_level(vacancy_trend):
     if vacancy_trend > 0:
         return "Many", "Pushes prices down"
     else:
         return "Few", "Helps prices"
 
+
 def trend_position(trend_diff):
     if trend_diff > 0:
         return "Above normal", "Helps prices"
     else:
         return "Below normal", "Pushes prices down"
+
+
+# 🔹 NEW UPDATE (ADDED — NOTHING ELSE CHANGED)
+def meaning_and_action(situation):
+    if situation == "Risky":
+        return "The market is working against prices", "Avoid rushing"
+    elif situation == "Balanced":
+        return "The market is neither helping nor hurting prices", "Start monitoring"
+    else:
+        return "The market is helping prices", "Look for opportunities"
 
 # =================================================
 # EARLY MARKET SIGNAL
@@ -265,19 +308,20 @@ st.markdown("---")
 st.subheader("🗓️ Future Market Outlook")
 
 st.write(
-    "Each row explains how the market may look at that time and how investors may want to act if current conditions continue."
+    "Each row explains how the market may look at that time and how investors may want to act "
+    "if current conditions continue."
 )
 
 st.markdown(
     "**Example (1 month row):** "
-    "“Over the next month, market conditions are risky, most forces are working against prices, "
+    "“Over the next month, market conditions are risky, most conditions are working against prices, "
     "and it’s better to wait than rush into a deal.”"
 )
 
-# Base signal from the model for this metro
-base_score = latest["prob_up"]
+# Base signal from the model for the selected metro
+base_score = float(latest["prob_up"])  # already calculated earlier
 
-# Gently adjust outlook over time (more uncertainty further out)
+# Time horizons with gentle adjustment
 horizons = [
     ("1 month", base_score - 0.10),
     ("2 months", base_score - 0.07),
@@ -287,23 +331,21 @@ horizons = [
 ]
 
 rows = []
+
 for label, score in horizons:
-    score = min(max(score, 0.0), 1.0)  # keep in bounds
+    score = min(max(score, 0.0), 1.0)  # keep score valid
 
     situation = market_situation(score)
     effect = market_effect(score)
+    meaning, action = meaning_and_action(situation)
 
-    if situation == "Risky":
-        meaning = "Most forces are negative"
-        action = "Avoid rushing"
-    elif situation == "Balanced":
-        meaning = "Conditions are more balanced"
-        action = "Start monitoring"
-    else:
-        meaning = "Conditions are more supportive"
-        action = "Look for opportunities"
-
-    rows.append([label, situation, effect, meaning, action])
+    rows.append([
+        label,
+        situation,
+        effect,
+        meaning,
+        action
+    ])
 
 future_outlook = pd.DataFrame(
     rows,
