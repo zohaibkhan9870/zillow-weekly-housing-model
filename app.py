@@ -239,8 +239,11 @@ st.write(f"**Backtested Accuracy:** ~{confidence_pct}%")
 st.write(f"**Data Confidence:** {confidence_badge(len(temp))}")
 st.write(f"**Suggested Action:** {suggested_action(latest['prob_up'], latest['trend_diff'], latest['vol'], latest['vacancy_trend'])}")
 
-st.markdown("### Early market signal:")
-st.write(early_signal)
+def early_market_signal(row, prev_row):
+    if row["p13"] > prev_row["p13"]:
+        return "🟡 Compared to recent weeks, prices are falling more slowly."
+    else:
+        return "⚪ Compared to recent weeks, prices are still falling at the same or faster pace."
 
 st.markdown("### Why this outlook:")
 for r in simple_reasons(latest, latest["prob_up"]):
