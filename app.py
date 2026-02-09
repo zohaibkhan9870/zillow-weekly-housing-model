@@ -38,6 +38,20 @@ def friendly_label(p):
     elif p <= 0.45: return "🔴 Risky"
     return "🟡 Unclear"
 
+def market_situation(score):
+    if score < 0.45:
+        return "Risky"
+    elif score < 0.65:
+        return "Balanced"
+    return "Supportive"
+
+def market_effect(score):
+    if score < 0.45:
+        return "Against prices"
+    elif score < 0.65:
+        return "Neither helping nor hurting"
+    return "Helping prices"
+
 def regime_from_prob(p):
     if p >= 0.65: return "Supportive"
     elif p <= 0.45: return "Risky"
@@ -217,33 +231,68 @@ st.markdown("### Early market signal:")
 st.write(early_signal)
 
 st.markdown("### Why this outlook:")
-for r in simple_reasons(latest, latest["prob_up"]):
+for r in simple_reasons(latest, latest["prob_up"]):   
     st.write(f"- {r}")
-
 # =================================================
-# NEW: FUTURE MARKET OUTLOOK TABLE
+# FUTURE MARKET OUTLOOK (DYNAMIC BY METRO)
 # =================================================
 st.markdown("---")
 st.subheader("🗓️ Future Market Outlook")
 
-support_now = int(round(latest["prob_up"] * 100))
+st.write(
+    "Each row explains how the market may look at that time and how investors may want to act if current conditions continue."
+)
 
-future_table = pd.DataFrame([
-    ["1 month", max(support_now - 10, 20), "Market conditions are likely to remain weak", "Avoid rushing"],
-    ["2 months", max(support_now - 7, 25), "Market conditions are likely to remain weak", "Be very selective"],
-    ["3 months", max(support_now - 5, 30), "Market conditions are likely to remain weak", "Focus on discounts"],
-    ["6 months", min(max(support_now, 40), 55), "Market conditions may start to balance", "Start monitoring"],
-    ["1 year", min(max(support_now + 5, 45), 60), "Market conditions may improve", "Plan ahead"],
-], columns=[
-    "Time Ahead",
-    "Market affecting prices",
-    "What this means",
-    "Investor approach"
-])
+st.markdown(
+    "**Example (1 month row):** "
+    "“Over the next month, market conditions are risky, most forces are working against prices, "
+    "and it’s better to wait than rush into a deal.”"
+)
 
-future_table["Market affecting prices"] = future_table["Market affecting prices"].astype(str) + "%"
+# Base signal from the model for this metro
+base_score = latest["prob_up"]
 
-st.dataframe(future_table, use_container_width=True)
+# Gently adjust outlook over time (more uncertainty further out)
+horizons = [
+    ("1 month", base_score - 0.10),
+    ("2 months", base_score - 0.07),
+    ("3 months", base_score - 0.05),
+    ("6 months", base_score),
+    ("1 year", base_score + 0.05),
+]
+
+rows = []
+for label, score in horizons:
+    score = min(max(score, 0.0), 1.0)  # keep in bounds
+
+    situation = market_situation(score)
+    effect = market_effect(score)
+
+    if situation == "Risky":
+        meaning = "Most forces are negative"
+        action = "Avoid rushing"
+    elif situation == "Balanced":
+        meaning = "Conditions are more balanced"
+        action = "Start monitoring"
+    else:
+        meaning = "Conditions are more supportive"
+        action = "Look for opportunities"
+
+    rows.append([label, situation, effect, meaning, action])
+
+future_outlook = pd.DataFrame(
+    rows,
+    columns=[
+        "Time Ahead",
+        "Market situation",
+        "Market effect",
+        "What this means",
+        "Investor approach",
+    ],
+)
+
+st.dataframe(future_outlook, use_container_width=True)
+
 # =================================================
 # WHY THE MARKET LOOKS THIS WAY
 # =================================================
