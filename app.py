@@ -241,7 +241,7 @@ future_table = pd.DataFrame([
     "Investor approach"
 ])
 
-future_table["Market Support Level"] = future_table["Market Support Level"].astype(str) + "%"
+future_table["Market affecting prices"] = future_table["Market affecting prices"].astype(str) + "%"
 
 st.dataframe(future_table, use_container_width=True)
 
