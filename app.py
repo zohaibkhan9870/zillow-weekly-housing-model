@@ -75,13 +75,13 @@ def simple_reasons(row, prob):
     return reasons
 
 # =================================================
-# EARLY MARKET SIGNAL (SIMPLE WORDS)
+# EARLY MARKET SIGNAL
 # =================================================
 def early_market_signal(row, prev_row):
     if row["p13"] > prev_row["p13"]:
-        return "🟡 Compared to recent weeks, prices are falling more slowly."
+        return "🟡 Prices are still going down, but the drop has started to ease."
     else:
-        return "⚪ Compared to recent weeks, prices are still falling at the same or faster pace."
+        return "⚪ Prices are still going down, and the drop has not eased yet."
 
 # =================================================
 # FRED LOADER
@@ -221,14 +221,24 @@ for r in simple_reasons(latest, latest["prob_up"]):
     st.write(f"- {r}")
 
 # =================================================
-# FORWARD LOOK
+# NEW: FUTURE MARKET OUTLOOK TABLE
 # =================================================
 st.markdown("---")
-st.subheader("🗓️ What the Market Looks Like Next")
-label = friendly_label(latest["prob_up"])
-st.write(f"- Coming period: {label}")
-st.write(f"- Following period: {label}")
-st.write(f"- After that: {label}")
+st.subheader("🗓️ Future Market Outlook")
+
+support_now = int(round(latest["prob_up"] * 100))
+
+future_table = pd.DataFrame([
+    ["1 month", max(support_now - 10, 20), "Market conditions are likely to remain weak", "Avoid rushing"],
+    ["2 months", max(support_now - 7, 25), "Market conditions are likely to remain weak", "Be very selective"],
+    ["3 months", max(support_now - 5, 30), "Market conditions are likely to remain weak", "Focus on discounts"],
+    ["6 months", min(max(support_now, 40), 55), "Market conditions may start to balance", "Start monitoring"],
+    ["1 year", min(max(support_now + 5, 45), 60), "Market conditions may improve", "Plan ahead"],
+], columns=["Time Ahead", "Market Support Level", "What this means", "Investor approach"])
+
+future_table["Market Support Level"] = future_table["Market Support Level"].astype(str) + "%"
+
+st.dataframe(future_table, use_container_width=True)
 
 # =================================================
 # METRO COMPARISON — TOP 3
