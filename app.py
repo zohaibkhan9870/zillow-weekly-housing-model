@@ -69,33 +69,13 @@ def proxy_up_probability(price_series):
 
 def simple_reasons(row, prob):
     reasons = []
-
-    if row["trend_diff"] < 0:
-        reasons.append("📉 Home prices are below their usual level, showing weakness")
-    else:
-        reasons.append("📈 Home prices are holding above their usual level")
-
-    if row["p13"] < 0:
-        reasons.append("↘️ Prices have been slowing recently")
-    else:
-        reasons.append("↗️ Prices are still moving upward")
-
-    if row["vacancy_trend"] > 0:
-        reasons.append("🏘️ More homes are coming onto the market")
-    else:
-        reasons.append("🏠 Limited supply is supporting prices")
-
-    if prob <= 0.45:
-        reasons.append("⚠️ Overall, the market looks risky right now")
-    elif prob >= 0.65:
-        reasons.append("✅ Overall, conditions look supportive")
-    else:
-        reasons.append("🤔 Overall, the market is mixed")
-
+    reasons.append("📉 Prices are below normal levels" if row["trend_diff"] < 0 else "📈 Prices are holding above normal levels")
+    reasons.append("↘️ Prices have been slowing recently" if row["p13"] < 0 else "↗️ Prices are still moving upward")
+    reasons.append("🏘️ More homes are coming onto the market" if row["vacancy_trend"] > 0 else "🏠 Limited supply is supporting prices")
     return reasons
 
 # =================================================
-# NEW: EARLY STABILIZATION SIGNAL
+# EARLY MARKET SIGNAL (SIMPLE WORDS)
 # =================================================
 def early_market_signal(row, prev_row):
     if row["p13"] > prev_row["p13"]:
@@ -221,7 +201,7 @@ temp["regime"] = temp["prob_up"].apply(regime_from_prob)
 
 latest = temp.iloc[-1]
 previous = temp.iloc[-2]
-early_signal = early_stabilization_signal(latest, previous)
+early_signal = early_market_signal(latest, previous)
 
 # =================================================
 # MARKET SNAPSHOT
@@ -233,7 +213,8 @@ st.write(f"**Backtested Accuracy:** ~{confidence_pct}%")
 st.write(f"**Data Confidence:** {confidence_badge(len(temp))}")
 st.write(f"**Suggested Action:** {suggested_action(latest['prob_up'], latest['trend_diff'], latest['vol'], latest['vacancy_trend'])}")
 
-early_signal = early_market_signal(latest, previous)
+st.markdown("### Early market signal:")
+st.write(early_signal)
 
 st.markdown("### Why this outlook:")
 for r in simple_reasons(latest, latest["prob_up"]):
