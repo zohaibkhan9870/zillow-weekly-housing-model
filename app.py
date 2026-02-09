@@ -234,7 +234,7 @@ future_table = pd.DataFrame([
     ["3 months", max(support_now - 5, 30), "Market conditions are likely to remain weak", "Focus on discounts"],
     ["6 months", min(max(support_now, 40), 55), "Market conditions may start to balance", "Start monitoring"],
     ["1 year", min(max(support_now + 5, 45), 60), "Market conditions may improve", "Plan ahead"],
-], columns=["Time Ahead", "Market affecting prices", "What this means", "Investor approach"])
+], columns=["Time Ahead", "Market Affecting Prices", "What this means", "Investor approach"])
 
 future_table["Market Support Level"] = future_table["Market Support Level"].astype(str) + "%"
 
