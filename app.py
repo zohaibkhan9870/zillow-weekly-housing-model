@@ -97,11 +97,17 @@ def simple_reasons(row, prob):
 # =================================================
 # NEW: EARLY STABILIZATION SIGNAL
 # =================================================
-def early_market_signal(row, prev_row):
-    if row["p13"] > prev_row["p13"]:
-        return "🟡 Compared to recent weeks, prices are falling more slowly."
+def early_stabilization_signal(row, prev_row):
+    improving_momentum = row["p13"] > prev_row["p13"]
+    falling_volatility = row["vol"] < prev_row["vol"]
+    improving_trend_gap = row["trend_diff"] > prev_row["trend_diff"]
+
+    score = sum([improving_momentum, falling_volatility, improving_trend_gap])
+
+    if score >= 2:
+        return "🟡 Early stabilization detected — prices may be forming a base. Risk remains elevated."
     else:
-        return "⚪ Compared to recent weeks, prices are still falling at the same or faster pace."
+        return "⚪ No early stabilization — market weakness still dominates."
 
 # =================================================
 # FRED LOADER
@@ -232,6 +238,9 @@ st.write(f"**Market Outlook:** {friendly_label(latest['prob_up'])}")
 st.write(f"**Backtested Accuracy:** ~{confidence_pct}%")
 st.write(f"**Data Confidence:** {confidence_badge(len(temp))}")
 st.write(f"**Suggested Action:** {suggested_action(latest['prob_up'], latest['trend_diff'], latest['vol'], latest['vacancy_trend'])}")
+
+st.markdown("### Early market signal:")
+st.write(early_signal)
 
 st.markdown("### Why this outlook:")
 for r in simple_reasons(latest, latest["prob_up"]):
