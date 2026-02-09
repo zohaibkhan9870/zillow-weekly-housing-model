@@ -97,17 +97,11 @@ def simple_reasons(row, prob):
 # =================================================
 # NEW: EARLY STABILIZATION SIGNAL
 # =================================================
-def early_stabilization_signal(row, prev_row):
-    improving_momentum = row["p13"] > prev_row["p13"]
-    falling_volatility = row["vol"] < prev_row["vol"]
-    improving_trend_gap = row["trend_diff"] > prev_row["trend_diff"]
-
-    score = sum([improving_momentum, falling_volatility, improving_trend_gap])
-
-    if score >= 2:
-        return "🟡 Early stabilization detected — prices may be forming a base. Risk remains elevated."
+def early_market_signal(row, prev_row):
+    if row["p13"] > prev_row["p13"]:
+        return "🟡 Compared to recent weeks, prices are falling more slowly."
     else:
-        return "⚪ No early stabilization — market weakness still dominates."
+        return "⚪ Compared to recent weeks, prices are still falling at the same or faster pace."
 
 # =================================================
 # FRED LOADER
