@@ -88,6 +88,31 @@ def simple_reasons(row, prob):
     reasons.append("🏘️ More homes are coming onto the market" if row["vacancy_trend"] > 0 else "🏠 Limited supply is supporting prices")
     return reasons
 
+def price_direction(p13):
+    if p13 > 0:
+        return "Rising", "Helps prices"
+    else:
+        return "Falling", "Pushes prices down"
+
+def rate_level(rate):
+    if rate > 6.5:
+        return "High", "Pushes prices down"
+    elif rate < 5.5:
+        return "Low", "Helps prices"
+    return "Normal", "Neutral effect"
+
+def supply_level(vacancy_trend):
+    if vacancy_trend > 0:
+        return "Many", "Pushes prices down"
+    else:
+        return "Few", "Helps prices"
+
+def trend_position(trend_diff):
+    if trend_diff > 0:
+        return "Above normal", "Helps prices"
+    else:
+        return "Below normal", "Pushes prices down"
+
 # =================================================
 # EARLY MARKET SIGNAL
 # =================================================
@@ -294,21 +319,28 @@ future_outlook = pd.DataFrame(
 st.dataframe(future_outlook, use_container_width=True)
 
 # =================================================
-# WHY THE MARKET LOOKS THIS WAY
+# WHY THE MARKET LOOKS THIS WAY (DYNAMIC BY METRO)
 # =================================================
 st.markdown("---")
 st.subheader("🔍 Why the market looks this way")
 
 st.write(
-    "This summary shows the main things currently pushing prices up or down."
+    "This summary shows the main things currently pushing prices up or down for the selected metro."
 )
+
+latest_row = latest  # already computed in your model
+
+price_seen, price_effect = price_direction(latest_row["p13"])
+rate_seen, rate_effect = rate_level(latest_row["interest"])
+supply_seen, supply_effect = supply_level(latest_row["vacancy_trend"])
+trend_seen, trend_effect = trend_position(latest_row["trend_diff"])
 
 why_table = pd.DataFrame(
     [
-        ["Recent prices", "Falling", "Pushes prices down"],
-        ["Interest rates", "High", "Pushes prices down"],
-        ["Homes for sale", "Many", "Pushes prices down"],
-        ["Long-term trend", "Below normal", "Pushes prices down"],
+        ["Recent prices", price_seen, price_effect],
+        ["Interest rates", rate_seen, rate_effect],
+        ["Homes for sale", supply_seen, supply_effect],
+        ["Long-term trend", trend_seen, trend_effect],
     ],
     columns=[
         "What the model looks at",
