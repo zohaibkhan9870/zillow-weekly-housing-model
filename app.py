@@ -244,6 +244,31 @@ future_table = pd.DataFrame([
 future_table["Market affecting prices"] = future_table["Market affecting prices"].astype(str) + "%"
 
 st.dataframe(future_table, use_container_width=True)
+# =================================================
+# WHY THE MARKET LOOKS THIS WAY
+# =================================================
+st.markdown("---")
+st.subheader("🔍 Why the market looks this way")
+
+st.write(
+    "This summary shows the main things currently pushing prices up or down."
+)
+
+why_table = pd.DataFrame(
+    [
+        ["Recent prices", "Falling", "Pushes prices down"],
+        ["Interest rates", "High", "Pushes prices down"],
+        ["Homes for sale", "Many", "Pushes prices down"],
+        ["Long-term trend", "Below normal", "Pushes prices down"],
+    ],
+    columns=[
+        "What the model looks at",
+        "What it sees",
+        "Effect on prices",
+    ],
+)
+
+st.dataframe(why_table, use_container_width=True)
 
 # =================================================
 # METRO COMPARISON — TOP 3
