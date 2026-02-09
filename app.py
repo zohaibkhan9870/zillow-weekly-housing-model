@@ -233,8 +233,7 @@ st.write(f"**Backtested Accuracy:** ~{confidence_pct}%")
 st.write(f"**Data Confidence:** {confidence_badge(len(temp))}")
 st.write(f"**Suggested Action:** {suggested_action(latest['prob_up'], latest['trend_diff'], latest['vol'], latest['vacancy_trend'])}")
 
-st.markdown("### Early market signal:")
-st.write(early_signal)
+early_signal = early_market_signal(latest, previous)
 
 st.markdown("### Why this outlook:")
 for r in simple_reasons(latest, latest["prob_up"]):
