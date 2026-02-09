@@ -18,14 +18,14 @@ st.title("🏡 Texas Real Estate Price Outlook Dashboard")
 st.write("Zillow + FRED + ML → Texas metro housing market signals")
 
 # =================================================
-# HOW TO USE (INVESTOR FRIENDLY)
+# HOW TO USE
 # =================================================
 st.info(
     "### How to use this dashboard\n"
-    "- **Avoid buying when risk is high** and prices are likely to struggle\n"
-    "- **Compare Texas cities** to see which markets look stronger or weaker right now\n"
-    "- **Decide when to act** — buy, wait, or negotiate — based on market conditions\n\n"
-    "This tool helps you understand **market risk and timing**, not exact future prices."
+    "- Avoid buying when risk is high and prices are likely to struggle\n"
+    "- Compare Texas cities to see which markets look stronger or weaker right now\n"
+    "- Decide when to act — buy, wait, or negotiate — based on market conditions\n\n"
+    "This tool helps with market risk and timing, not exact future prices."
 )
 
 st.markdown("---")
@@ -71,28 +71,47 @@ def simple_reasons(row, prob):
     reasons = []
 
     if row["trend_diff"] < 0:
-        reasons.append("📉 Home prices are below their usual level, which shows weakness in the market")
+        reasons.append("📉 Home prices are below their usual level, showing weakness")
     else:
-        reasons.append("📈 Home prices are holding above their usual level, showing market strength")
+        reasons.append("📈 Home prices are holding above their usual level")
 
     if row["p13"] < 0:
-        reasons.append("↘️ Prices have been slowing recently instead of rising")
+        reasons.append("↘️ Prices have been slowing recently")
     else:
         reasons.append("↗️ Prices are still moving upward")
 
     if row["vacancy_trend"] > 0:
-        reasons.append("🏘️ More homes are coming onto the market, giving buyers more choice")
+        reasons.append("🏘️ More homes are coming onto the market")
     else:
-        reasons.append("🏠 Fewer homes are available, which supports prices")
+        reasons.append("🏠 Limited supply is supporting prices")
 
     if prob <= 0.45:
         reasons.append("⚠️ Overall, the market looks risky right now")
     elif prob >= 0.65:
-        reasons.append("✅ Overall, market conditions look supportive")
+        reasons.append("✅ Overall, conditions look supportive")
     else:
-        reasons.append("🤔 Overall, the market is mixed and uncertain")
+        reasons.append("🤔 Overall, the market is mixed")
 
     return reasons
+
+# =================================================
+# NEW: EARLY STABILIZATION SIGNAL
+# =================================================
+def early_stabilization_signal(row, prev_row):
+    """
+    This detects early signs that prices may be stabilizing,
+    even if the overall market is still risky.
+    """
+    improving_momentum = row["p13"] > prev_row["p13"]
+    falling_volatility = row["vol"] < prev_row["vol"]
+    improving_trend_gap = row["trend_diff"] > prev_row["trend_diff"]
+
+    score = sum([improving_momentum, falling_volatility, improving_trend_gap])
+
+    if score >= 2:
+        return "🟡 Early stabilization detected — prices may be forming a base. Risk remains elevated."
+    else:
+        return "⚪ No early stabilization — market weakness still dominant."
 
 # =================================================
 # FRED LOADER
@@ -185,11 +204,11 @@ data["vacancy_trend"] = data["vacancy"].diff(13)
 data.dropna(inplace=True)
 
 if len(data) < 150:
-    st.warning("⚠️ Not enough reliable historical data for this metro.")
+    st.warning("⚠️ Not enough reliable historical data.")
     st.stop()
 
 # =================================================
-# MODEL + BACKTEST
+# MODEL
 # =================================================
 predictors = ["adj_price", "interest", "vacancy", "p13"]
 
@@ -210,108 +229,24 @@ confidence_pct = int(round(acc * 100))
 temp["prob_up"] = rf.predict_proba(temp[predictors])[:, 1]
 temp["regime"] = temp["prob_up"].apply(regime_from_prob)
 
-latest_prob = float(temp["prob_up"].iloc[-1])
-latest_row = temp.iloc[-1]
+latest = temp.iloc[-1]
+previous = temp.iloc[-2]
 
-weekly_label = friendly_label(latest_prob)
+early_signal = early_stabilization_signal(latest, previous)
 
 # =================================================
 # MARKET SNAPSHOT
 # =================================================
 st.markdown("---")
 st.markdown(f"## 📌 Market Snapshot — {selected_metro}")
-st.write(f"**Market Outlook:** {weekly_label}")
+st.write(f"**Market Outlook:** {friendly_label(latest['prob_up'])}")
 st.write(f"**Backtested Accuracy:** ~{confidence_pct}%")
 st.write(f"**Data Confidence:** {confidence_badge(len(temp))}")
-st.write(f"**Suggested Action:** {suggested_action(latest_prob, latest_row['trend_diff'], latest_row['vol'], latest_row['vacancy_trend'])}")
+st.write(f"**Suggested Action:** {suggested_action(latest['prob_up'], latest['trend_diff'], latest['vol'], latest['vacancy_trend'])}")
+
+st.markdown("### Early market signal:")
+st.write(early_signal)
 
 st.markdown("### Why this outlook:")
-for r in simple_reasons(latest_row, latest_prob):
+for r in simple_reasons(latest, latest["prob_up"]):
     st.write(f"- {r}")
-
-# =================================================
-# FORWARD-LOOKING REGIME (T+1 / T+2 / T+3)
-# =================================================
-st.markdown("---")
-st.subheader("🗓️ What the Market Looks Like Next")
-st.caption(
-    "This shows the **likely market direction** based on the most recent data. "
-    "It helps with timing decisions, not exact price predictions."
-)
-
-st.write(f"- **Coming period:** {weekly_label}")
-st.write(f"- **Following period:** {weekly_label}")
-st.write(f"- **After that:** {weekly_label}")
-
-# =================================================
-# METRO COMPARISON — TOP 3
-# =================================================
-st.markdown("---")
-st.subheader("🏙️ Texas Metro Comparison — Top 3")
-
-rows = []
-for m in tx_metros:
-    pm = price_df[price_df["RegionName"] == m]
-    if pm.empty: continue
-    p = pd.DataFrame(pm.iloc[0, 5:])
-    p.index = pd.to_datetime(p.index)
-    p.columns = ["price"]
-    prob = proxy_up_probability(p["price"])
-    if prob is None: continue
-    rows.append([m, f"{prob*100:.0f}%", friendly_label(prob), action_for_table(prob)])
-
-if rows:
-    comp_df = pd.DataFrame(rows, columns=["Metro", "Price Up Chance", "Outlook", "What to Do"])
-    st.dataframe(comp_df.sort_values("Price Up Chance", ascending=False).head(3), use_container_width=True)
-
-# =================================================
-# ALL TEXAS METROS RANKING
-# =================================================
-st.markdown("---")
-st.subheader("🏙️ Texas Metro Rankings (All Metros)")
-
-rank_rows = []
-for m in tx_metros:
-    pm = price_df[price_df["RegionName"] == m]
-    if pm.empty: continue
-    p = pd.DataFrame(pm.iloc[0, 5:])
-    p.index = pd.to_datetime(p.index)
-    p.columns = ["price"]
-    prob = proxy_up_probability(p["price"])
-    if prob is None: continue
-    trend = "Uptrend" if prob >= 0.55 else "Down / Sideways"
-    rank_rows.append([m, friendly_label(prob), trend, confidence_badge(len(p.dropna()))])
-
-rank_df = pd.DataFrame(rank_rows, columns=["Metro", "Outlook", "Trend Direction", "Confidence"])
-st.dataframe(rank_df, use_container_width=True)
-
-# =================================================
-# HISTORICAL PRICE TREND & RISK REGIMES
-# =================================================
-st.markdown("---")
-st.subheader("📈 Historical Price Trend & Risk Regimes")
-
-fig = plt.figure(figsize=(14,6))
-plt.plot(temp.index, temp["adj_price"], color="black", linewidth=2)
-
-for i in range(len(temp)-1):
-    color = "green" if temp["regime"].iloc[i] == "Supportive" else "red"
-    plt.axvspan(temp.index[i], temp.index[i+1], color=color, alpha=0.15)
-
-st.pyplot(fig)
-
-# =================================================
-# WEEKLY OUTLOOK CHART
-# =================================================
-st.markdown("---")
-st.subheader("📊 Weekly Outlook (Last 12 Weeks)")
-
-recent = temp.tail(12)
-fig2, ax = plt.subplots(figsize=(12,5))
-ax.plot(recent.index, recent["prob_up"], marker="o", linewidth=2, color="black")
-ax.axhline(0.65, linestyle="--", color="green", alpha=0.6)
-ax.axhline(0.45, linestyle="--", color="red", alpha=0.6)
-ax.set_ylim(0,1)
-
-st.pyplot(fig2)
-st.caption("Above 0.65 = supportive • Below 0.45 = risky")
