@@ -18,6 +18,11 @@ st.title("🏡 Texas Housing Market Outlook")
 st.write("Zillow + FRED + ML → Texas metro housing market signals")
 
 # =================================================
+# SESSION STATE (Zillow files flow control)
+# =================================================
+if "has_files" not in st.session_state:
+    st.session_state.has_files = None
+# =================================================
 # HOW TO USE
 # =================================================
 st.info(
@@ -166,6 +171,58 @@ def load_fred(series_id):
 # =================================================
 # FILE UPLOAD
 # =================================================
+st.markdown("## 📁 Zillow Data Files")
+
+if st.session_state.has_files is None:
+    st.write("Do you already have the Zillow CSV files downloaded?")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("✅ Yes, I have the files"):
+            st.session_state.has_files = True
+
+    with col2:
+        if st.button("❌ No, I need to download them"):
+            st.session_state.has_files = False
+
+if st.session_state.has_files is False:
+    st.info("### 📥 Download Zillow Data Files")
+
+    st.write(
+        "You’ll need **two Zillow CSV files** before continuing:\n\n"
+        "**1️⃣ Weekly Median Sale Price (Metro-level)**\n"
+        "**2️⃣ Monthly ZHVI (Metro-level)**"
+    )
+
+    st.write("Download them from Zillow’s official data page:")
+
+    st.link_button(
+        "🔗 Open Zillow Research Data Page",
+        "https://www.zillow.com/research/data/"
+    )
+
+    st.markdown(
+        """
+        **On the Zillow page, download:**
+        - **Metro Median Sale Price – Weekly**
+        - **Metro ZHVI – Monthly**
+        
+        Keep the files as CSV. No need to rename them.
+        """
+    )
+
+    if st.button("✅ I’ve downloaded the files"):
+        st.session_state.has_files = True
+
+if st.session_state.has_files is True:
+    st.markdown("---")
+    st.subheader("📤 Upload Zillow Files")
+
+    # 👇 KEEP YOUR EXISTING upload + validation logic here
+    # (the per-column validation you already implemented)
+
+
 st.subheader("📤 Upload Zillow Files")
 
 c1, c2 = st.columns(2)
