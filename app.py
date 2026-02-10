@@ -34,9 +34,11 @@ st.markdown("---")
 # HELPERS
 # =================================================
 def friendly_label(p):
-    if p >= 0.65: return "🟢 Supportive"
-    elif p <= 0.45: return "🔴 Risky"
-    return "🟡 Unclear"
+    if p >= 0.65:
+        return "🟢 Supportive"
+    elif p <= 0.45:
+        return "🔴 Risky"
+    return "🟡 Balanced"
 
 def market_situation(score):
     if score < 0.45: return "Risky"
@@ -66,9 +68,11 @@ def suggested_action(prob, *_):
     return "Balanced market. Compare options carefully."
 
 def action_for_table(prob):
-    if prob >= 0.65: return "Favorable — consider buying"
-    elif prob <= 0.45: return "Risky — be cautious"
-    return "Mixed — take your time"
+    if prob >= 0.65:
+        return "Favorable — consider buying"
+    elif prob <= 0.45:
+        return "Risky — be cautious"
+    return "No rush — wait for better setup"
 
 def proxy_up_probability(price_series):
     pct = price_series.pct_change(13).dropna()
