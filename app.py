@@ -157,13 +157,14 @@ def meaning_and_action(situation):
         return "The market is helping prices", "Look for opportunities"
 
 # =================================================
-# RECENT MARKET MOVEMENT (SHORT-TERM)
+# EARLY MARKET SIGNAL
 # =================================================
 def early_market_signal(row, prev_row):
     if row["p13"] > prev_row["p13"]:
-        return "🟡 Prices are still falling, but the decline is slowing."
+        return "🟡 Prices are still going down, but the drop has started to ease."
     else:
-        return "⚪ Prices are still falling at a similar or faster pace."
+        return "⚪ Prices are still going down, and the drop has not eased yet."
+
 # =================================================
 # FRED LOADER
 # =================================================
@@ -294,15 +295,11 @@ st.write(f"**Backtested Accuracy:** ~{confidence_pct}%")
 st.write(f"**Data Confidence:** {confidence_badge(len(temp))}")
 st.write(f"**Suggested Action:** {suggested_action(latest['prob_up'], latest['trend_diff'], latest['vol'], latest['vacancy_trend'])}")
 
-# =================================================
-# RECENT VS LONGER-TERM MARKET CONTEXT
-# =================================================
-
-st.markdown("### 📉 Recent market movement (last few weeks)")
+st.markdown("### Early market signal:")
 st.write(early_signal)
 
-st.markdown("### 📈 Overall market direction (last few months)")
-for r in simple_reasons(latest, latest_prob):
+st.markdown("### Why this outlook:")
+for r in simple_reasons(latest, latest["prob_up"]):   
     st.write(f"- {r}")
 # =================================================
 # FUTURE MARKET OUTLOOK (DYNAMIC BY METRO)
@@ -468,3 +465,5 @@ ax.set_ylim(0,1)
 
 st.pyplot(fig2)
 st.caption("Above 0.65 = supportive • Below 0.45 = risky")
+
+
