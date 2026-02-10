@@ -283,6 +283,7 @@ temp["regime"] = temp["prob_up"].apply(regime_from_prob)
 
 latest = temp.iloc[-1]
 previous = temp.iloc[-2]
+latest_prob = float(latest["prob_up"])
 early_signal = early_market_signal(latest, previous)
 
 # =================================================
