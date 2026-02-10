@@ -265,6 +265,14 @@ for r in simple_reasons(latest, latest_prob):
 st.markdown("---")
 st.subheader("🗓️ Future Market Outlook")
 
+# Helper for colored dots (place this once with other helpers if not already defined)
+def situation_with_dot(situation):
+    if situation == "Supportive":
+        return "🟢 Supportive"
+    elif situation == "Risky":
+        return "🔴 Risky"
+    return "🟡 Balanced"
+
 horizons = [
     ("1 month", latest_prob - 0.10),
     ("2 months", latest_prob - 0.07),
@@ -291,11 +299,24 @@ for label, score in horizons:
         action
     ])
 
-st.dataframe(pd.DataFrame(
-    rows,
-    columns=["Time Ahead", "Market situation", "Market effect", "What this means", "Investor approach"]
-), use_container_width=True)
+st.dataframe(
+    pd.DataFrame(
+        rows,
+        columns=[
+            "Time Ahead",
+            "Market Condition",
+            "Market Effect",
+            "What this means",
+            "Suggested Approach"
+        ]
+    ),
+    use_container_width=True
+)
 
+st.caption(
+    "Market Condition shows overall pressure on prices. "
+    "Shorter time frames are more uncertain; longer time frames reflect broader trends."
+)
 # =================================================
 # WHY THE MARKET LOOKS THIS WAY
 # =================================================
