@@ -34,136 +34,81 @@ st.markdown("---")
 # HELPERS
 # =================================================
 def friendly_label(p):
-    if p >= 0.65: 
-        return "🟢 Supportive"
-    elif p <= 0.45: 
-        return "🔴 Risky"
+    if p >= 0.65: return "🟢 Supportive"
+    elif p <= 0.45: return "🔴 Risky"
     return "🟡 Unclear"
 
-
 def market_situation(score):
-    if score < 0.45:
-        return "Risky"
-    elif score < 0.65:
-        return "Balanced"
+    if score < 0.45: return "Risky"
+    elif score < 0.65: return "Balanced"
     return "Supportive"
 
-
 def market_effect(score):
-    if score < 0.45:
-        return "Against prices"
-    elif score < 0.65:
-        return "Neither helping nor hurting"
+    if score < 0.45: return "Against prices"
+    elif score < 0.65: return "Neither helping nor hurting"
     return "Helping prices"
 
-
 def regime_from_prob(p):
-    if p >= 0.65: 
-        return "Supportive"
-    elif p <= 0.45: 
-        return "Risky"
+    if p >= 0.65: return "Supportive"
+    elif p <= 0.45: return "Risky"
     return "Unclear"
 
-
 def confidence_badge(n_obs):
-    if n_obs >= 300: 
-        return "🟢 High"
-    elif n_obs >= 180: 
-        return "🟡 Medium"
+    if n_obs >= 300: return "🟢 High"
+    elif n_obs >= 180: return "🟡 Medium"
     return "🔴 Low"
 
-
-def suggested_action(prob, trend_diff, vol, vacancy_trend):
+def suggested_action(prob, *_):
     if prob >= 0.65:
         return "Market has strength. Buying can make sense if value is fair."
     elif prob <= 0.45:
         return "Risk is elevated. Consider waiting or negotiating harder."
     return "Balanced market. Compare options carefully."
 
-
 def action_for_table(prob):
-    if prob >= 0.65: 
-        return "Favorable — consider buying"
-    elif prob <= 0.45: 
-        return "Risky — be cautious"
+    if prob >= 0.65: return "Favorable — consider buying"
+    elif prob <= 0.45: return "Risky — be cautious"
     return "Mixed — take your time"
-
 
 def proxy_up_probability(price_series):
     pct = price_series.pct_change(13).dropna()
-    if pct.empty: 
-        return None
+    if pct.empty: return None
     raw = float(pct.tail(1).values[0])
     prob = 0.50 + np.clip(raw, -0.10, 0.10) * 2.0
     return float(np.clip(prob, 0.05, 0.95))
 
-
-def simple_reasons(row, prob):
+def simple_reasons(row, _):
     reasons = []
-    reasons.append(
-        "📉 Prices are below normal levels" 
-        if row["trend_diff"] < 0 
-        else "📈 Prices are holding above normal levels"
-    )
-    reasons.append(
-        "↘️ Prices have been slowing recently" 
-        if row["p13"] < 0 
-        else "↗️ Prices are still moving upward"
-    )
-    reasons.append(
-        "🏘️ More homes are coming onto the market" 
-        if row["vacancy_trend"] > 0 
-        else "🏠 Limited supply is supporting prices"
-    )
+    reasons.append("📉 Prices are below normal levels" if row["trend_diff"] < 0 else "📈 Prices are holding above normal levels")
+    reasons.append("↘️ Prices have been falling recently" if row["p13"] < 0 else "↗️ Prices have been moving upward")
+    reasons.append("🏘️ More homes are coming onto the market" if row["vacancy_trend"] > 0 else "🏠 Fewer homes are available")
     return reasons
 
-
 def price_direction(p13):
-    if p13 > 0:
-        return "Rising", "Helps prices"
-    else:
-        return "Falling", "Pushes prices down"
-
+    return ("Rising", "Helps prices") if p13 > 0 else ("Falling", "Pushes prices down")
 
 def rate_level(rate):
-    if rate > 6.5:
-        return "High", "Pushes prices down"
-    elif rate < 5.5:
-        return "Low", "Helps prices"
+    if rate > 6.5: return "High", "Pushes prices down"
+    elif rate < 5.5: return "Low", "Helps prices"
     return "Normal", "Neutral effect"
 
-
 def supply_level(vacancy_trend):
-    if vacancy_trend > 0:
-        return "Many", "Pushes prices down"
-    else:
-        return "Few", "Helps prices"
-
+    return ("Many", "Pushes prices down") if vacancy_trend > 0 else ("Few", "Helps prices")
 
 def trend_position(trend_diff):
-    if trend_diff > 0:
-        return "Above normal", "Helps prices"
-    else:
-        return "Below normal", "Pushes prices down"
+    return ("Above normal", "Helps prices") if trend_diff > 0 else ("Below normal", "Pushes prices down")
 
-
-# 🔹 NEW UPDATE (ADDED — NOTHING ELSE CHANGED)
 def meaning_and_action(situation):
     if situation == "Risky":
-        return "The market is working against prices", "Avoid rushing"
+        return "Most conditions are working against prices", "Avoid rushing"
     elif situation == "Balanced":
-        return "The market is neither helping nor hurting prices", "Start monitoring"
-    else:
-        return "The market is helping prices", "Look for opportunities"
+        return "Conditions are neither clearly positive nor negative", "Start monitoring"
+    return "Conditions are generally supporting prices", "Look for opportunities"
 
-# =================================================
-# EARLY MARKET SIGNAL
-# =================================================
 def early_market_signal(row, prev_row):
     if row["p13"] > prev_row["p13"]:
-        return "🟡 Prices are still going down, but the drop has started to ease."
-    else:
-        return "⚪ Prices are still going down, and the drop has not eased yet."
+        return "🟡 Prices are still falling, but the decline is slowing."
+    return "⚪ Prices are still falling at a similar or faster pace."
 
 # =================================================
 # FRED LOADER
@@ -255,10 +200,6 @@ data["vacancy_trend"] = data["vacancy"].diff(13)
 
 data.dropna(inplace=True)
 
-if len(data) < 150:
-    st.warning("⚠️ Not enough reliable historical data.")
-    st.stop()
-
 # =================================================
 # MODEL
 # =================================================
@@ -283,6 +224,7 @@ temp["regime"] = temp["prob_up"].apply(regime_from_prob)
 
 latest = temp.iloc[-1]
 previous = temp.iloc[-2]
+latest_prob = float(latest["prob_up"])
 early_signal = early_market_signal(latest, previous)
 
 # =================================================
@@ -290,108 +232,68 @@ early_signal = early_market_signal(latest, previous)
 # =================================================
 st.markdown("---")
 st.markdown(f"## 📌 Market Snapshot — {selected_metro}")
-st.write(f"**Market Outlook:** {friendly_label(latest['prob_up'])}")
+st.write(f"**Market Outlook:** {friendly_label(latest_prob)}")
 st.write(f"**Backtested Accuracy:** ~{confidence_pct}%")
 st.write(f"**Data Confidence:** {confidence_badge(len(temp))}")
-st.write(f"**Suggested Action:** {suggested_action(latest['prob_up'], latest['trend_diff'], latest['vol'], latest['vacancy_trend'])}")
+st.write(f"**Suggested Action:** {suggested_action(latest_prob, None, None, None)}")
 
-st.markdown("### Early market signal:")
+# =================================================
+# RECENT VS LONGER-TERM CONTEXT
+# =================================================
+st.markdown("### 📉 Recent market movement (last few weeks)")
 st.write(early_signal)
 
-st.markdown("### Why this outlook:")
-for r in simple_reasons(latest, latest["prob_up"]):   
+st.markdown("### 📈 Overall market direction (last few months)")
+for r in simple_reasons(latest, latest_prob):
     st.write(f"- {r}")
+
 # =================================================
-# FUTURE MARKET OUTLOOK (DYNAMIC BY METRO)
+# FUTURE MARKET OUTLOOK
 # =================================================
 st.markdown("---")
 st.subheader("🗓️ Future Market Outlook")
 
-st.write(
-    "Each row explains how the market may look at that time and how investors may want to act "
-    "if current conditions continue."
-)
-
-st.markdown(
-    "**Example (1 month row):** "
-    "“Over the next month, market conditions are risky, most conditions are working against prices, "
-    "and it’s better to wait than rush into a deal.”"
-)
-
-# Base signal from the model for the selected metro
-base_score = float(latest["prob_up"])  # already calculated earlier
-
-# Time horizons with gentle adjustment
 horizons = [
-    ("1 month", base_score - 0.10),
-    ("2 months", base_score - 0.07),
-    ("3 months", base_score - 0.05),
-    ("6 months", base_score),
-    ("1 year", base_score + 0.05),
+    ("1 month", latest_prob - 0.10),
+    ("2 months", latest_prob - 0.07),
+    ("3 months", latest_prob - 0.05),
+    ("6 months", latest_prob),
+    ("1 year", latest_prob + 0.05),
 ]
 
 rows = []
-
 for label, score in horizons:
-    score = min(max(score, 0.0), 1.0)  # keep score valid
-
+    score = min(max(score, 0), 1)
     situation = market_situation(score)
     effect = market_effect(score)
     meaning, action = meaning_and_action(situation)
+    rows.append([label, situation, effect, meaning, action])
 
-    rows.append([
-        label,
-        situation,
-        effect,
-        meaning,
-        action
-    ])
-
-future_outlook = pd.DataFrame(
+st.dataframe(pd.DataFrame(
     rows,
-    columns=[
-        "Time Ahead",
-        "Market situation",
-        "Market effect",
-        "What this means",
-        "Investor approach",
-    ],
-)
-
-st.dataframe(future_outlook, use_container_width=True)
+    columns=["Time Ahead", "Market situation", "Market effect", "What this means", "Investor approach"]
+), use_container_width=True)
 
 # =================================================
-# WHY THE MARKET LOOKS THIS WAY (DYNAMIC BY METRO)
+# WHY THE MARKET LOOKS THIS WAY
 # =================================================
 st.markdown("---")
 st.subheader("🔍 Why the market looks this way")
 
-st.write(
-    "This summary shows the main things currently pushing prices up or down for the selected metro."
-)
+price_seen, price_effect = price_direction(latest["p13"])
+rate_seen, rate_effect = rate_level(latest["interest"])
+supply_seen, supply_effect = supply_level(latest["vacancy_trend"])
+trend_seen, trend_effect = trend_position(latest["trend_diff"])
 
-latest_row = latest  # already computed in your model
-
-price_seen, price_effect = price_direction(latest_row["p13"])
-rate_seen, rate_effect = rate_level(latest_row["interest"])
-supply_seen, supply_effect = supply_level(latest_row["vacancy_trend"])
-trend_seen, trend_effect = trend_position(latest_row["trend_diff"])
-
-why_table = pd.DataFrame(
+st.dataframe(pd.DataFrame(
     [
         ["Recent prices", price_seen, price_effect],
         ["Interest rates", rate_seen, rate_effect],
         ["Homes for sale", supply_seen, supply_effect],
         ["Long-term trend", trend_seen, trend_effect],
     ],
-    columns=[
-        "What the model looks at",
-        "What it sees",
-        "Effect on prices",
-    ],
-)
-
-st.dataframe(why_table, use_container_width=True)
+    columns=["What the model looks at", "What it sees", "Effect on prices"]
+), use_container_width=True)
 
 # =================================================
 # METRO COMPARISON — TOP 3
@@ -411,8 +313,10 @@ for m in tx_metros:
     rows.append([m, f"{prob*100:.0f}%", friendly_label(prob), action_for_table(prob)])
 
 if rows:
-    comp_df = pd.DataFrame(rows, columns=["Metro", "Price Up Chance", "Outlook", "What to Do"])
-    st.dataframe(comp_df.sort_values("Price Up Chance", ascending=False).head(3), use_container_width=True)
+    st.dataframe(pd.DataFrame(
+        rows,
+        columns=["Metro", "Price Up Chance", "Outlook", "What to Do"]
+    ).sort_values("Price Up Chance", ascending=False).head(3), use_container_width=True)
 
 # =================================================
 # ALL METROS RANKING
@@ -429,11 +333,12 @@ for m in tx_metros:
     p.columns = ["price"]
     prob = proxy_up_probability(p["price"])
     if prob is None: continue
-    trend = "Uptrend" if prob >= 0.55 else "Down / Sideways"
-    rank_rows.append([m, friendly_label(prob), trend, confidence_badge(len(p.dropna()))])
+    rank_rows.append([m, friendly_label(prob), "Uptrend" if prob >= 0.55 else "Down / Sideways", confidence_badge(len(p.dropna()))])
 
-rank_df = pd.DataFrame(rank_rows, columns=["Metro", "Outlook", "Trend Direction", "Confidence"])
-st.dataframe(rank_df, use_container_width=True)
+st.dataframe(pd.DataFrame(
+    rank_rows,
+    columns=["Metro", "Outlook", "Trend Direction", "Confidence"]
+), use_container_width=True)
 
 # =================================================
 # HISTORICAL PRICE & REGIMES
@@ -445,8 +350,12 @@ fig = plt.figure(figsize=(14,6))
 plt.plot(temp.index, temp["adj_price"], color="black", linewidth=2)
 
 for i in range(len(temp)-1):
-    color = "green" if temp["regime"].iloc[i] == "Supportive" else "red"
-    plt.axvspan(temp.index[i], temp.index[i+1], color=color, alpha=0.15)
+    plt.axvspan(
+        temp.index[i],
+        temp.index[i+1],
+        color="green" if temp["regime"].iloc[i] == "Supportive" else "red",
+        alpha=0.15
+    )
 
 st.pyplot(fig)
 
@@ -458,12 +367,10 @@ st.subheader("📊 Weekly Outlook (Last 12 Weeks)")
 
 recent = temp.tail(12)
 fig2, ax = plt.subplots(figsize=(12,5))
-ax.plot(recent.index, recent["prob_up"], marker="o", linewidth=2, color="black")
+ax.plot(recent.index, recent["prob_up"], marker="o", linewidth=2)
 ax.axhline(0.65, linestyle="--", color="green", alpha=0.6)
 ax.axhline(0.45, linestyle="--", color="red", alpha=0.6)
 ax.set_ylim(0,1)
 
 st.pyplot(fig2)
 st.caption("Above 0.65 = supportive • Below 0.45 = risky")
-
-
