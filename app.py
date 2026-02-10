@@ -16,12 +16,6 @@ import matplotlib.pyplot as plt
 st.set_page_config(page_title="Texas Housing Market Outlook", layout="wide")
 st.title("🏡 Texas Housing Market Outlook")
 st.write("Zillow + FRED + ML → Texas metro housing market signals")
-
-# =================================================
-# SESSION STATE (Zillow files flow control)
-# =================================================
-if "has_files" not in st.session_state:
-    st.session_state.has_files = None
 # =================================================
 # HOW TO USE
 # =================================================
