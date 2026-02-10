@@ -373,4 +373,4 @@ ax.axhline(0.45, linestyle="--", color="red", alpha=0.6)
 ax.set_ylim(0,1)
 
 st.pyplot(fig2)
-st.caption("st.caption("Above 0.65 = market helping prices • Below 0.45 = market working against prices")
+st.caption("st.caption("Above 0.65 = market helping prices • Below 0.45 = market working against prices")")
