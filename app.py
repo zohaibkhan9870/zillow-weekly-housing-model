@@ -157,14 +157,13 @@ def meaning_and_action(situation):
         return "The market is helping prices", "Look for opportunities"
 
 # =================================================
-# EARLY MARKET SIGNAL
+# RECENT MARKET MOVEMENT (SHORT-TERM)
 # =================================================
 def early_market_signal(row, prev_row):
     if row["p13"] > prev_row["p13"]:
-        return "🟡 Prices are still going down, but the drop has started to ease."
+        return "🟡 Prices are still falling, but the decline is slowing."
     else:
-        return "⚪ Prices are still going down, and the drop has not eased yet."
-
+        return "⚪ Prices are still falling at a similar or faster pace."
 # =================================================
 # FRED LOADER
 # =================================================
@@ -296,11 +295,15 @@ st.write(f"**Backtested Accuracy:** ~{confidence_pct}%")
 st.write(f"**Data Confidence:** {confidence_badge(len(temp))}")
 st.write(f"**Suggested Action:** {suggested_action(latest['prob_up'], latest['trend_diff'], latest['vol'], latest['vacancy_trend'])}")
 
-st.markdown("### Early market signal:")
+# =================================================
+# RECENT VS LONGER-TERM MARKET CONTEXT
+# =================================================
+
+st.markdown("### 📉 Recent market movement (last few weeks)")
 st.write(early_signal)
 
-st.markdown("### Why this outlook:")
-for r in simple_reasons(latest, latest["prob_up"]):   
+st.markdown("### 📈 Overall market direction (last few months)")
+for r in simple_reasons(latest_row, latest_prob):
     st.write(f"- {r}")
 # =================================================
 # FUTURE MARKET OUTLOOK (DYNAMIC BY METRO)
