@@ -40,6 +40,31 @@ def friendly_label(p):
         return "🔴 Risky"
     return "🟡 Balanced"
 
+def validate_zillow_file(df, file_type):
+    """
+    file_type: 'price' or 'value'
+    """
+
+    required_columns = ["RegionName"]
+
+    # Check required columns
+    for col in required_columns:
+        if col not in df.columns:
+            return False, f"Missing required column: {col}"
+
+    # Check that there are date columns (Zillow format)
+    if len(df.columns) < 10:
+        return False, "File does not appear to contain Zillow time-series data."
+
+    # Optional: simple sanity check for file type
+    col_sample = df.columns[5]
+    try:
+        pd.to_datetime(col_sample)
+    except:
+        return False, "Date columns not found where expected."
+
+    return True, None
+
 def market_situation(score):
     if score < 0.45: return "Risky"
     elif score < 0.65: return "Balanced"
@@ -149,6 +174,17 @@ if not price_file or not value_file:
 price_df = pd.read_csv(price_file)
 value_df = pd.read_csv(value_file)
 
+# Validate price file
+is_valid, error_msg = validate_zillow_file(price_df, "price")
+if not is_valid:
+    st.error(f"❌ Incorrect Weekly Median Sale Price file uploaded.\n\n{error_msg}")
+    st.stop()
+
+# Validate value file
+is_valid, error_msg = validate_zillow_file(value_df, "value")
+if not is_valid:
+    st.error(f"❌ Incorrect Monthly ZHVI file uploaded.\n\n{error_msg}")
+    st.stop()
 # =================================================
 # TEXAS METROS
 # =================================================
