@@ -114,6 +114,37 @@ def early_market_signal(row, prev_row):
         return "🟡 Prices are still falling, but the decline is slowing."
     return "⚪ Prices are still falling at a similar or faster pace."
 
+def detect_zillow_file_type(df):
+    """
+    Returns: 'weekly_price', 'monthly_zhvi', or None
+    """
+
+    if "RegionName" not in df.columns:
+        return None
+
+    # Zillow date columns start after column 5
+    date_cols = df.columns[5:]
+
+    try:
+        dates = pd.to_datetime(date_cols, errors="coerce")
+        dates = dates[~pd.isna(dates)]
+    except:
+        return None
+
+    if len(dates) < 5:
+        return None
+
+    deltas = dates.to_series().diff().dt.days.dropna()
+    median_gap = deltas.median()
+
+    if median_gap <= 10:
+        return "weekly_price"
+
+    if 25 <= median_gap <= 35:
+        return "monthly_zhvi"
+
+    return None
+
 # =================================================
 # FRED LOADER
 # =================================================
