@@ -242,6 +242,13 @@ st.write(f"**Model Reliability:** {confidence_badge(len(temp))}")
 
 st.write(f"**Suggested Approach:** {suggested_action(latest_prob, None, None, None)}")
 
+with st.expander("ℹ️ How reliable is this assessment?"):
+    st.write(
+        f"This outlook is based on historical patterns. "
+        f"In past data, similar signals were correct about {confidence_pct}% of the time. "
+        "This is meant to guide decisions, not predict exact prices."
+    )
+
 # =================================================
 # RECENT VS LONGER-TERM CONTEXT
 # =================================================
