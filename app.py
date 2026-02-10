@@ -328,21 +328,31 @@ if rows:
 st.markdown("---")
 st.subheader("🏙️ Texas Metro Rankings (All Metros)")
 
+st.caption(
+    "Market Condition reflects overall pressure on prices. "
+    "Recent Price Movement shows what prices have been doing lately."
+)
+
 rank_rows = []
 for m in tx_metros:
     pm = price_df[price_df["RegionName"] == m]
-    if pm.empty: continue
+    if pm.empty:
+        continue
+
     p = pd.DataFrame(pm.iloc[0, 5:])
     p.index = pd.to_datetime(p.index)
     p.columns = ["price"]
+
     prob = proxy_up_probability(p["price"])
-    if prob is None: continue
-rank_rows.append([
-    m,
-    friendly_label(prob),
-    "Rising" if prob >= 0.55 else "Falling or Flat",
-    confidence_badge(len(p.dropna()))
-])
+    if prob is None:
+        continue
+
+    rank_rows.append([   # ✅ INSIDE LOOP
+        m,
+        friendly_label(prob),
+        "Rising" if prob >= 0.55 else "Falling or Flat",
+        confidence_badge(len(p.dropna()))
+    ])
 
 st.dataframe(pd.DataFrame(
     rank_rows,
