@@ -177,7 +177,7 @@ zillow.index = price.index
 zillow.drop(columns="month", inplace=True)
 
 # =================================================
-# LOAD MACRO DATA
+# LOAD MARKET CONDITIONS DATA
 # =================================================
 interest = load_fred("MORTGAGE30US").rename(columns={"value": "interest"})
 cpi = load_fred("CPIAUCSL").rename(columns={"value": "cpi"})
@@ -287,10 +287,10 @@ trend_seen, trend_effect = trend_position(latest["trend_diff"])
 
 st.dataframe(pd.DataFrame(
     [
-        ["Recent prices", price_seen, price_effect],
+        ["Recent prices movement", price_seen, price_effect],
         ["Interest rates", rate_seen, rate_effect],
         ["Homes for sale", supply_seen, supply_effect],
-        ["Long-term trend", trend_seen, trend_effect],
+        ["Normal Price level", trend_seen, trend_effect],
     ],
     columns=["What the model looks at", "What it sees", "Effect on prices"]
 ), use_container_width=True)
@@ -373,4 +373,4 @@ ax.axhline(0.45, linestyle="--", color="red", alpha=0.6)
 ax.set_ylim(0,1)
 
 st.pyplot(fig2)
-st.caption("Above 0.65 = supportive • Below 0.45 = risky")
+st.caption("st.caption("Above 0.65 = market helping prices • Below 0.45 = market working against prices")
