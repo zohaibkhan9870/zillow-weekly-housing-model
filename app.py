@@ -164,7 +164,6 @@ def early_market_signal(row, prev_row):
         return "🟡 Prices are still falling, but the decline is slowing."
     else:
         return "⚪ Prices are still falling at a similar or faster pace."
-
 # =================================================
 # FRED LOADER
 # =================================================
