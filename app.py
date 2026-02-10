@@ -276,10 +276,20 @@ horizons = [
 rows = []
 for label, score in horizons:
     score = min(max(score, 0), 1)
+
     situation = market_situation(score)
+    situation_display = situation_with_dot(situation)
+
     effect = market_effect(score)
     meaning, action = meaning_and_action(situation)
-    rows.append([label, situation, effect, meaning, action])
+
+    rows.append([
+        label,
+        situation_display,
+        effect,
+        meaning,
+        action
+    ])
 
 st.dataframe(pd.DataFrame(
     rows,
