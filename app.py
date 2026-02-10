@@ -315,7 +315,7 @@ for m in tx_metros:
 if rows:
     st.dataframe(pd.DataFrame(
         rows,
-        columns=["Metro", "Price Up Chance", "Outlook", "What to Do"]
+        columns=["Metro", "Price Up Chance", "Market Condition", "Suggested Approach"]
     ).sort_values("Price Up Chance", ascending=False).head(3), use_container_width=True)
 
 # =================================================
