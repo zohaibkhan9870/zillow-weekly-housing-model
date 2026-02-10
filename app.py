@@ -157,13 +157,13 @@ def meaning_and_action(situation):
         return "The market is helping prices", "Look for opportunities"
 
 # =================================================
-# EARLY MARKET SIGNAL
+# RECENT MARKET MOVEMENT (SHORT-TERM)
 # =================================================
-def Early market signal(row, prev_row):
+def early_market_signal(row, prev_row):
     if row["p13"] > prev_row["p13"]:
-        return "🟡 Prices are still going down, but the drop has started to ease."
+        return "🟡 Prices are still falling, but the decline is slowing."
     else:
-        return "⚪ Prices are still going down, and the drop has not eased yet."
+        return "⚪ Prices are still falling at a similar or faster pace."
 
 # =================================================
 # FRED LOADER
