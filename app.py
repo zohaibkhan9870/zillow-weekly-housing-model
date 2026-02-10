@@ -234,12 +234,13 @@ early_signal = early_market_signal(latest, previous)
 # =================================================
 # MARKET SNAPSHOT
 # =================================================
-st.markdown("---")
 st.markdown(f"## 📌 Market Snapshot — {selected_metro}")
-st.write(f"**Market Outlook:** {friendly_label(latest_prob)}")
-st.write(f"**Backtested Accuracy:** ~{confidence_pct}%")
-st.write(f"**Data Confidence:** {confidence_badge(len(temp))}")
-st.write(f"**Suggested Action:** {suggested_action(latest_prob, None, None, None)}")
+
+st.write(f"**Current Market Condition:** {friendly_label(latest_prob)}")
+
+st.write(f"**Model Reliability:** {confidence_badge(len(temp))}")
+
+st.write(f"**Suggested Approach:** {suggested_action(latest_prob, None, None, None)}")
 
 # =================================================
 # RECENT VS LONGER-TERM CONTEXT
