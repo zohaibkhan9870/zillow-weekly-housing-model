@@ -13,8 +13,8 @@ import matplotlib.pyplot as plt
 # =================================================
 # PAGE SETUP
 # =================================================
-st.set_page_config(page_title="Texas Real Estate Price Outlook", layout="wide")
-st.title("🏡 Texas Real Estate Price Outlook Dashboard")
+st.set_page_config(page_title="Texas Housing Market Outlook", layout="wide")
+st.title("🏡 Texas Housing Market Outlook")
 st.write("Zillow + FRED + ML → Texas metro housing market signals")
 
 # =================================================
