@@ -159,7 +159,7 @@ def meaning_and_action(situation):
 # =================================================
 # EARLY MARKET SIGNAL
 # =================================================
-def This week’s market movement(row, prev_row):
+def Early market signal(row, prev_row):
     if row["p13"] > prev_row["p13"]:
         return "🟡 Prices are still going down, but the drop has started to ease."
     else:
