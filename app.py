@@ -302,7 +302,7 @@ st.markdown("### 📉 Recent market movement (last few weeks)")
 st.write(early_signal)
 
 st.markdown("### 📈 Overall market direction (last few months)")
-for r in simple_reasons(latest_row, latest_prob):
+for r in simple_reasons(latest, latest_prob):
     st.write(f"- {r}")
 # =================================================
 # FUTURE MARKET OUTLOOK (DYNAMIC BY METRO)
