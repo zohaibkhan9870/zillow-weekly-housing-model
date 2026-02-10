@@ -114,6 +114,40 @@ def early_market_signal(row, prev_row):
         return "🟡 Prices are still falling, but the decline is slowing."
     return "⚪ Prices are still falling at a similar or faster pace."
 
+def detect_zillow_file_type(df):
+    """
+    Returns: 'weekly_price', 'monthly_zhvi', or None
+    """
+
+    # Must have RegionName
+    if "RegionName" not in df.columns:
+        return None
+
+    # Try to extract date columns (Zillow dates start after col 5)
+    date_cols = df.columns[5:]
+
+    try:
+        dates = pd.to_datetime(date_cols, errors="coerce")
+        dates = dates[~pd.isna(dates)]
+    except:
+        return None
+
+    if len(dates) < 5:
+        return None
+
+    # Measure spacing between dates
+    deltas = dates.to_series().diff().dt.days.dropna()
+
+    median_gap = deltas.median()
+
+    if median_gap <= 10:
+        return "weekly_price"
+
+    if 25 <= median_gap <= 35:
+        return "monthly_zhvi"
+
+    return None
+
 # =================================================
 # FRED LOADER
 # =================================================
@@ -148,6 +182,25 @@ if not price_file or not value_file:
 
 price_df = pd.read_csv(price_file)
 value_df = pd.read_csv(value_file)
+
+price_type = detect_zillow_file_type(price_df)
+value_type = detect_zillow_file_type(value_df)
+
+# Validate Weekly Median Sale Price file
+if price_type != "weekly_price":
+    if price_type == "monthly_zhvi":
+        st.error("❌ Wrong file uploaded for **Weekly Median Sale Price**.\n\nYou uploaded a **Monthly ZHVI** file here. Please swap the files.")
+    else:
+        st.error("❌ Incorrect file uploaded for **Weekly Median Sale Price**.\n\nThis file does not match Zillow weekly price data.")
+    st.stop()
+
+# Validate Monthly ZHVI file
+if value_type != "monthly_zhvi":
+    if value_type == "weekly_price":
+        st.error("❌ Wrong file uploaded for **Monthly ZHVI**.\n\nYou uploaded a **Weekly Median Sale Price** file here. Please swap the files.")
+    else:
+        st.error("❌ Incorrect file uploaded for **Monthly ZHVI**.\n\nThis file does not match Zillow monthly ZHVI data.")
+    st.stop()
 
 # =================================================
 # TEXAS METROS
