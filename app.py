@@ -337,11 +337,16 @@ for m in tx_metros:
     p.columns = ["price"]
     prob = proxy_up_probability(p["price"])
     if prob is None: continue
-    rank_rows.append([m, friendly_label(prob), "Uptrend" if prob >= 0.55 else "Down / Sideways", confidence_badge(len(p.dropna()))])
+rank_rows.append([
+    m,
+    friendly_label(prob),
+    "Rising" if prob >= 0.55 else "Falling or Flat",
+    confidence_badge(len(p.dropna()))
+])
 
 st.dataframe(pd.DataFrame(
     rank_rows,
-    columns=["Metro", "Outlook", "Trend Direction", "Confidence"]
+    columns=["Metro", "Market Condition", "Recent Price Movement", "Confidence"]
 ), use_container_width=True)
 
 # =================================================
