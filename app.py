@@ -16,6 +16,12 @@ import matplotlib.pyplot as plt
 st.set_page_config(page_title="Texas Housing Market Outlook", layout="wide")
 st.title("🏡 Texas Housing Market Outlook")
 st.write("Zillow + FRED + ML → Texas metro housing market signals")
+
+# =================================================
+# SESSION STATE (Zillow files flow control)
+# =================================================
+if "has_files" not in st.session_state:
+    st.session_state.has_files = None
 # =================================================
 # HOW TO USE
 # =================================================
@@ -28,153 +34,6 @@ st.info(
 )
 
 st.markdown("---")
-
-# =================================================
-# ZILLOW FILE AVAILABILITY CHECK
-# =================================================
-
-if "has_files" not in st.session_state:
-    st.session_state.has_files = None
-
-
-def detect_zillow_file_type(df):
-    cols = " ".join(df.columns).lower()
-
-    if "zhvi" in cols or "home value" in cols:
-        return "monthly_zhvi"
-
-    if "sale" in cols and ("week" in cols or "weekly" in cols):
-        return "weekly_price"
-
-    return "unknown"
-
-
-st.markdown("## 📁 Do you already have the Zillow data files?")
-
-c_yes, c_no = st.columns(2)
-
-with c_yes:
-    if st.button("✅ Yes, I have the files"):
-        st.session_state.has_files = True
-
-with c_no:
-    if st.button("❌ No, I need to download them"):
-        st.session_state.has_files = False
-
-
-# =================================================
-# DOWNLOAD INSTRUCTIONS (IF USER DOES NOT HAVE FILES)
-# =================================================
-
-if st.session_state.has_files is False:
-    st.markdown("## 📥 Download Zillow Data Files")
-
-    st.markdown("""
-You need **two Zillow CSV files** to continue.
-
----
-
-### 1️⃣ Weekly Median Sale Price (Metro)
-- **Section:** Sales  
-- **Data Type:** Median Sale Price (Smooth, All Homes, Weekly)  
-- **Geography:** Metro & U.S.
-
----
-
-### 2️⃣ Monthly ZHVI (Metro)
-- **Section:** Home Values  
-- **Data Type:**  
-  ZHVI All Homes (SFR, Condo/Co-op), Smoothed, Seasonally Adjusted  
-- **Geography:** Metro & U.S.
-
----
-
-⚠️ Important:
-- Download **CSV only**
-- Do **not rename** the files
-- Other Zillow files (sales count, payments, etc.) will not work
-""")
-
-    st.link_button(
-        "🔗 Open Zillow Research Data Page",
-        "https://www.zillow.com/research/data/"
-    )
-
-    if st.button("✅ I’ve downloaded the files"):
-        st.session_state.has_files = True
-
-    st.stop()
-
-
-# =================================================
-# FILE UPLOAD + VALIDATION
-# =================================================
-
-if st.session_state.has_files is True:
-
-    st.markdown("---")
-    st.subheader("📤 Upload Zillow Files")
-
-    price_error = False
-    value_error = False
-
-    c1, c2 = st.columns(2)
-
-    # ---------- WEEKLY MEDIAN SALE PRICE ----------
-    with c1:
-        price_file = st.file_uploader(
-            "Weekly Median Sale Price CSV",
-            type="csv",
-            key="weekly_price"
-        )
-
-        if price_file is not None:
-            price_df = pd.read_csv(price_file)
-            price_type = detect_zillow_file_type(price_df)
-
-            if price_type != "weekly_price":
-                price_error = True
-                if price_type == "monthly_zhvi":
-                    st.error(
-                        "❌ Wrong file uploaded.\n\n"
-                        "This is a **Monthly ZHVI** file.\n"
-                        "Please upload the **Weekly Median Sale Price** file here."
-                    )
-                else:
-                    st.error(
-                        "❌ Wrong file uploaded.\n\n"
-                        "This file does not match Zillow **weekly price** data."
-                    )
-
-    # ---------- MONTHLY ZHVI ----------
-    with c2:
-        value_file = st.file_uploader(
-            "Monthly ZHVI CSV",
-            type="csv",
-            key="monthly_zhvi"
-        )
-
-        if value_file is not None:
-            value_df = pd.read_csv(value_file)
-            value_type = detect_zillow_file_type(value_df)
-
-            if value_type != "monthly_zhvi":
-                value_error = True
-                if value_type == "weekly_price":
-                    st.error(
-                        "❌ Wrong file uploaded.\n\n"
-                        "This is a **Weekly Median Sale Price** file.\n"
-                        "Please upload the **Monthly ZHVI** file here."
-                    )
-                else:
-                    st.error(
-                        "❌ Wrong file uploaded.\n\n"
-                        "This file does not match Zillow **monthly ZHVI** data."
-                    )
-
-    # ---------- HARD STOP ----------
-    if price_file is None or value_file is None or price_error or value_error:
-        st.stop()
 
 # =================================================
 # HELPERS
